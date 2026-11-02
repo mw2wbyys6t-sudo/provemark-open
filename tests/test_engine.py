@@ -7,7 +7,7 @@ from pathlib import Path
 
 from provemark.config import load_config
 from provemark.engine import _calibration_notes, gate_failed, run_scan
-from provemark.models import Finding
+from provemark.models import Finding, ScanResult
 from provemark.report import ai_fix_prompt, render
 from provemark.report import sarif
 from provemark import cache as cache_module
@@ -227,6 +227,24 @@ class CalibrationNoteTests(unittest.TestCase):
         findings = [self._finding("security") for _ in range(250)]
         notes = _calibration_notes(findings)
         self.assertTrue(any("--only security,dependency" in note for note in notes))
+
+
+class SarifLocationTests(unittest.TestCase):
+    def test_pathless_findings_are_not_sarif_results(self) -> None:
+        """GitHub 拒绝没有 location 的 SARIF result；仓库级 finding 只保留规则元数据。"""
+        result = ScanResult(
+            root=".",
+            findings=[
+                Finding("HYG-001", "hygiene", "high", "缺少许可证", "仓库没有 LICENSE"),
+                Finding("SEC-001", "secrets", "high", "文件级问题", "命中", path="src/app.py", line=3),
+            ],
+        )
+        document = json.loads(sarif.render(result))
+        results = document["runs"][0]["results"]
+        self.assertEqual([item["ruleId"] for item in results], ["SEC-001"])
+        self.assertTrue(all("locations" in item for item in results))
+        rule_ids = [rule["id"] for rule in document["runs"][0]["tool"]["driver"]["rules"]]
+        self.assertIn("HYG-001", rule_ids)
 
 
 if __name__ == "__main__":

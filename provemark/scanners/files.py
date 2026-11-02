@@ -184,6 +184,43 @@ TEST_PATH_TOKENS = ("test", "tests", "spec", "__tests__", "fixtures", "examples"
 # these — that is how a Go `_test.go` fixture kept a card number at "high".
 TEST_FILE_PATTERN = re.compile(r"(?:^test_.*\.py$|_test\.(?:go|py|rs|exs?)$|\.(?:test|spec)\.[cm]?[jt]sx?$)", re.IGNORECASE)
 
+# Build output and VCS internals are not the repository's source: `pip install .`
+# materialises build/lib/**, and scanning that copy produced a false AI-005 high
+# in CI while the working tree was clean.
+DEFAULT_SKIP_DIRS = frozenset(
+    {
+        ".git",
+        ".hg",
+        ".svn",
+        ".hgcheck",
+        ".venv",
+        "venv",
+        "env",
+        "build",
+        "dist",
+        ".eggs",
+        "htmlcov",
+        "node_modules",
+        "bower_components",
+        "__pycache__",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        ".nox",
+        ".next",
+        ".nuxt",
+        "site-packages",
+    }
+)
+
+
+def _is_skip_dir(name: str) -> bool:
+    lowered = name.lower()
+    if lowered in DEFAULT_SKIP_DIRS:
+        return True
+    return lowered.endswith((".egg-info", ".dist-info"))
+
 
 @dataclass
 class FileInfo:
@@ -230,7 +267,9 @@ def collect_files(root: Path, config: Config) -> tuple[list[FileInfo], list[str]
         rel_dir = current.relative_to(root).as_posix()
         prefix = "" if rel_dir == "." else rel_dir + "/"
         dirnames[:] = [
-            name for name in dirnames if not config.is_excluded((prefix + name + "/").lstrip("/"))
+            name
+            for name in dirnames
+            if not _is_skip_dir(name) and not config.is_excluded((prefix + name + "/").lstrip("/"))
         ]
         for filename in filenames:
             rel = (prefix + filename).lstrip("/")

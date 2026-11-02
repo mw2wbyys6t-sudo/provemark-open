@@ -3,7 +3,7 @@ name: provemark
 description: "本地零依赖的仓库原创性、风险与维护守卫（Provemark / 源印）。一次扫描看清任意技术栈仓库：许可证组合冲突、依赖漏洞、凭据泄漏、敏感数据（PII）、代码级安全漏洞（OWASP：SQL/命令/模板注入、路径穿越、SSRF、反序列化、XSS、弱哈希/随机/加密、TLS/JWT 校验关闭、XXE、C 溢出、Actions 注入、容器提权，带 CWE 映射）、AI 代码风险、供应链与仓库卫生，并给出逐条修法、可交给编码代理的修复指令、HTML/Markdown/SARIF 报告与 CI 门禁；维护老项目时用基线与趋势防止 AI 越改越糟（新增问题即阻断）。当用户要求扫描/体检某个仓库、问“这个仓库有什么风险/合规问题/能不能发布”、要做提交前门禁、排查泄漏的密钥或隐私数据、核对 license 与 SBOM（FOSSA/CycloneDX/SPDX）、生成 THIRD_PARTY_NOTICES / AI_USAGE / VENDORED 声明、或要证明“这个项目是不是自己的”时使用；also use for repository audit, security/code vulnerability scan, license compliance, secret leak, PII, supply chain and provenance checks on a local repo."
 license: Apache-2.0
 metadata:
-  version: "0.6.1"
+  version: "0.6.2"
   author: Provemark Contributors
   requires: python>=3.11 or a DSH runtime (auto-detected)
 ---

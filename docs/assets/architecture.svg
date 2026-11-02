@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="760" viewBox="0 0 1240 760" font-family="-apple-system, 'Segoe UI', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect width="1240" height="760" fill="#f8fafc"/>
+  <text x="40" y="52" font-size="26" font-weight="700" fill="#0f172a">Provemark 架构：一次扫描，五种出口</text>
+  <text x="40" y="80" font-size="14" fill="#475569">纯本地、零第三方运行时依赖；插件只是把同一套引擎常驻到 DeepSeek Harness 会话里。</text>
+
+  <!-- plugin bar -->
+  <rect x="40" y="104" width="1160" height="104" rx="14" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="64" y="136" font-size="17" font-weight="700" fill="#3730a3">DeepSeek Harness 插件（安装即自启，常驻每一步）</text>
+  <g font-size="13.5" fill="#312e81">
+    <text x="64" y="166">① 提示词红线：依赖/密钥/注入/认证与加密/SSRF/容器配置</text>
+    <text x="64" y="189">② 动态状态块：分数 · Top 3 · 过期提示 · 跨会话基线趋势</text>
+    <text x="430" y="166">③ 原生工具：provemark_guard / provemark_scan</text>
+    <text x="430" y="189">④ 后台扫描：改动后 8s 去抖复扫 + 风险通知</text>
+    <text x="790" y="166">⑤ 基线棘轮：新增 high/critical 直接阻断</text>
+    <text x="790" y="189">⑥ 技能：11 本领域手册 + 118 条规则解释</text>
+  </g>
+  <path d="M 620 210 L 620 238" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- repo -->
+  <rect x="40" y="240" width="300" height="330" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="64" y="276" font-size="17" font-weight="700" fill="#0f172a">你的仓库</text>
+  <g font-size="13.5" fill="#334155">
+    <text x="64" y="312">源码（19 个生态）</text>
+    <text x="64" y="340">清单 / 锁文件</text>
+    <text x="64" y="368">CI / Dockerfile / Actions</text>
+    <text x="64" y="396">文档与示例</text>
+    <text x="64" y="424">Git 历史（已提交文件）</text>
+  </g>
+  <text x="64" y="470" font-size="12.5" fill="#64748b">默认跳过：build/ dist/ .venv/</text>
+  <text x="64" y="490" font-size="12.5" fill="#64748b">node_modules/ .git/ *.egg-info/</text>
+  <text x="64" y="510" font-size="12.5" fill="#64748b">生成文件、二进制、超大文件</text>
+  <text x="64" y="540" font-size="12.5" fill="#64748b">所以 pip install . 之后</text>
+  <text x="64" y="558" font-size="12.5" fill="#64748b">不会把 build/lib 当源码扫</text>
+  <path d="M 348 405 L 404 405" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- scanners -->
+  <rect x="412" y="240" width="380" height="330" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="436" y="276" font-size="17" font-weight="700" fill="#0f172a">扫描器层（9 个）</text>
+  <g font-size="12.5" fill="#0f172a">
+    <rect x="436" y="296" width="86" height="28" rx="8" fill="#f1f5f9"/><text x="479" y="315" text-anchor="middle">repo 卫生</text>
+    <rect x="532" y="296" width="86" height="28" rx="8" fill="#f1f5f9"/><text x="575" y="315" text-anchor="middle">secrets</text>
+    <rect x="628" y="296" width="86" height="28" rx="8" fill="#f1f5f9"/><text x="671" y="315" text-anchor="middle">pii</text>
+    <rect x="724" y="296" width="52" height="28" rx="8" fill="#fef2f2"/><text x="750" y="315" text-anchor="middle">security</text>
+
+    <rect x="436" y="332" width="86" height="28" rx="8" fill="#f1f5f9"/><text x="479" y="351" text-anchor="middle">ai 工程</text>
+    <rect x="532" y="332" width="86" height="28" rx="8" fill="#f1f5f9"/><text x="575" y="351" text-anchor="middle">dependency</text>
+    <rect x="628" y="332" width="86" height="28" rx="8" fill="#f1f5f9"/><text x="671" y="351" text-anchor="middle">license</text>
+    <rect x="724" y="332" width="52" height="28" rx="8" fill="#f1f5f9"/><text x="750" y="351" text-anchor="middle">supply</text>
+  </g>
+  <text x="436" y="392" font-size="12.5" fill="#64748b">+ fossa（SBOM 对齐）</text>
+  <text x="436" y="424" font-size="13.5" fill="#0f172a" font-weight="600">118 条规则 · 8 个维度</text>
+  <text x="436" y="450" font-size="12.5" fill="#475569">代码安全 18 条带 CWE/OWASP 映射</text>
+  <text x="436" y="472" font-size="12.5" fill="#475569">AI 工程 26 条（超时/N+1/复杂度）</text>
+  <text x="436" y="500" font-size="12.5" fill="#475569">注释/文档字符串不算命中</text>
+  <text x="436" y="522" font-size="12.5" fill="#475569">测试代码不参与工程规则</text>
+  <text x="436" y="548" font-size="12.5" fill="#64748b">离线可用；联网时查 OSV + deps.dev</text>
+  <path d="M 794 405 L 850 405" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- findings / outputs -->
+  <rect x="858" y="240" width="342" height="330" rx="14" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="882" y="276" font-size="17" font-weight="700" fill="#0f172a">结论与出口</text>
+  <g font-size="13.5" fill="#334155">
+    <text x="882" y="308">分数 / 等级（权重 × confidence）</text>
+    <text x="882" y="334">严重度计数：致命 / 高 / 中 / 低</text>
+    <text x="882" y="360">每条都带：为什么 · 改哪里 · 怎么改</text>
+    <text x="882" y="386">fingerprint（可登记 ignore / 基线）</text>
+  </g>
+  <rect x="882" y="404" width="130" height="34" rx="9" fill="#e0f2fe"/><text x="947" y="426" text-anchor="middle" font-size="13" fill="#075985">table</text>
+  <rect x="1022" y="404" width="80" height="34" rx="9" fill="#e0f2fe"/><text x="1062" y="426" text-anchor="middle" font-size="13" fill="#075985">JSON</text>
+  <rect x="1112" y="404" width="70" height="34" rx="9" fill="#e0f2fe"/><text x="1147" y="426" text-anchor="middle" font-size="13" fill="#075985">MD</text>
+  <rect x="882" y="448" width="130" height="34" rx="9" fill="#dcfce7"/><text x="947" y="470" text-anchor="middle" font-size="13" fill="#166534">SARIF（行级）</text>
+  <rect x="1022" y="448" width="160" height="34" rx="9" fill="#dcfce7"/><text x="1102" y="470" text-anchor="middle" font-size="13" fill="#166534">HTML（单文件离线）</text>
+  <text x="882" y="516" font-size="12.5" fill="#64748b">门禁：--fail-on high（CI / pre-commit）</text>
+  <text x="882" y="540" font-size="12.5" fill="#64748b">SARIF 只含“有文件位置”的结果；</text>
+  <text x="882" y="558" font-size="12.5" fill="#64748b">仓库级问题留在 JSON/HTML</text>
+
+  <!-- bottom legend -->
+  <rect x="40" y="606" width="1160" height="112" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+  <text x="64" y="636" font-size="15" font-weight="700" fill="#0f172a">两句话记住它</text>
+  <text x="64" y="664" font-size="13.5" fill="#334155">1. 它给的是“可解释的信号”，不是安全评级：启发式规则会命中框架的惯用写法（宽泛 except、模板引擎 eval），所以大仓库/框架分数偏低时会自动附上校准说明。</text>
+  <text x="64" y="690" font-size="13.5" fill="#334155">2. 它真正的强项是“防退化”：首次扫描冻结基线（持久化、跨重启），之后每次改动比较新增/修掉；新增 high/critical 直接阻断。</text>
+</svg>

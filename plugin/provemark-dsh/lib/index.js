@@ -35,7 +35,7 @@ import { loadBaseline, saveBaseline } from './baseline-store.js';
 import { GUARDRAILS, SECTION_NAME, CONTEXT_NAME, stateText, toolText } from './format.js';
 
 export const name = 'provemark-guard';
-export const VERSION = '0.6.1';
+export const VERSION = '0.6.2';
 
 const MAX_SESSIONS = 64;
 

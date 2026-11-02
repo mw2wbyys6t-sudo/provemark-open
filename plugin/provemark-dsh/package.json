@@ -1,6 +1,6 @@
 {
   "name": "provemark-dsh",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "DeepSeek Harness skill bundle for Provemark（源印）— local, zero-dependency originality & risk scanning: license combination conflicts, vulnerable dependencies, leaked credentials, PII, AI-code risks, supply chain and repo hygiene.",
   "license": "Apache-2.0",
   "type": "module",

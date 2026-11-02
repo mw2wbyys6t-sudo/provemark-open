@@ -8,6 +8,34 @@ provemark scan
 
 不注册账号、不上传代码、不装第三方运行时依赖。Python / Node / Go / Rust / Java / Kotlin / Scala / C# / Ruby / PHP / Dart / Swift / Elixir / R / Haskell / C++ / Clojure / Julia / Perl / Conda 一次扫完。
 
+## 30 秒看懂
+
+![架构：一次扫描，五种出口](docs/assets/architecture.svg)
+
+图里最容易被忽略的一点：**扫描器和插件是同一套引擎**。`provemark scan` 是命令行形态；插件把它常驻到 DeepSeek Harness，让模型写代码时就看到红线、改完自动复扫、交付前有基线棘轮。
+
+![维护工作流：每一步都有人盯着](docs/assets/workflow.svg)
+
+### 真实报告长什么样
+
+![Provemark HTML 报告截图](docs/assets/report-screenshot.png)
+
+这是对一个故意做坏的 demo 仓库跑出来的 HTML 报告：SQL 拼接、MD5 口令、无超时外部请求、硬编码密钥……每条都带 `文件:行`、严重度、**为什么是问题**、**怎么修**。报告是单文件、离线可打开。
+
+### 几个容易误解的点
+
+| 容易误解 | 实际 |
+| --- | --- |
+| “分数低 = 不能发布” | 分数是**可解释信号**，不是安全评级（权重 × confidence）。框架/库的惯用写法会被 AI 规则命中，报告在 AI 类占多数时会自动附校准说明。 |
+| “扫一次就够了” | 代码在变，结论会过期。插件会标记「结论可能已过期」并在改动后自动复扫；命令行可接 CI 每次重扫。 |
+| “离线 = 没有漏洞” | 离线只跳过 OSV / deps.dev 查询，报告会写「数据不完整 / 未验证」，不会假装没有漏洞。 |
+| “插件和 pip 包是两套东西” | 同一套扫描引擎：pip 包是命令行；插件随包分发、不需要 `pip install`，技能文档解释每条规则。 |
+| “构建产物也会被扫” | 默认跳过 `build/`、`dist/`、`.venv/`、`node_modules/`、`*.egg-info/`、`.git/`——所以 CI 里 `pip install .` 之后扫描不会把 `build/lib/` 当源码误报。 |
+| “SARIF 里有全部问题” | SARIF 只含有文件位置的结果（GitHub Code Scanning 的要求）；缺 LICENSE / CI 这类仓库级问题保留在 JSON / HTML 报告里。 |
+| “AI 规则就是找 bug” | AI 规则（26 条）覆盖工程与算法反模式：无超时请求、循环内串行 await、N+1、`pd.concat`、`iterrows`……测试代码不参与这些规则。 |
+
+> 架构图/流程图是 SVG 矢量图；报告截图来自真实运行结果，不是示意图。
+
 ---
 
 ## 为什么做这个

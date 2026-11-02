@@ -46,6 +46,12 @@ def _rules(result: ScanResult) -> list[dict[str, Any]]:
 def _results(result: ScanResult) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     for finding in result.sorted_findings():
+        # GitHub Code Scanning rejects results without a physical location
+        # ("locationFromSarifResult: expected at least one location"). Repository-
+        # level findings (missing LICENSE/CI/lockfile) have no file: they stay in
+        # the JSON/HTML reports and rule metadata, but cannot be a SARIF result.
+        if not finding.path:
+            continue
         entry: dict[str, Any] = {
             "ruleId": finding.rule_id,
             "level": LEVEL[finding.severity],

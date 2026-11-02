@@ -5,6 +5,18 @@
 
 ## [未发布]
 
+## [0.6.2] - 2026-11-02
+
+### 修复（GitHub CI 红叉 + README 图文示例）
+
+- **CI `scan` 失败根因一**：`pip install .` 生成 `build/lib/**`，扫描器把构建副本当源码，误报 AI-005 high。
+  文件收集默认跳过 `build/`、`dist/`、`.venv/`、`venv/`、`node_modules/`、`*.egg-info/`、`.git/` 与缓存目录；
+  项目级 `scan.exclude` 仍叠加生效。新增 `tests/test_file_collection.py`。
+- **根因二**：GitHub Code Scanning 拒绝没有 location 的 SARIF result（`locationFromSarifResult`）。
+  SARIF 现在只包含有文件位置的问题；仓库级问题保留在 JSON/HTML 与规则元数据里。新增回归测试。
+- README 新增「30 秒看懂」：架构图、维护工作流图、真实 HTML 报告截图，以及 7 条常见误解校准。
+- 实测：模拟 CI（干净副本 + `pip install .`）`--fail-on high` 退出 0，SARIF 全部结果都带 location。
+
 ## [0.6.1] - 2026-11-02
 
 ### 修复（发布前风险清零：3.11 兼容 / 跨平台 / 冷启动 / 分数校准）
