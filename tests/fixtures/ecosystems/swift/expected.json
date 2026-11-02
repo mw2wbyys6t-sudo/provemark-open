@@ -1,0 +1,14 @@
+{
+  "packages": [
+    {
+      "ecosystem": "SwiftURL",
+      "name": "github.com/Alamofire/Alamofire",
+      "version": "5.9.1"
+    },
+    {
+      "ecosystem": "SwiftURL",
+      "name": "github.com/apple/swift-nio",
+      "version": "2.65.0"
+    }
+  ]
+}

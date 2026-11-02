@@ -1,0 +1,20 @@
+{
+  "packages": [
+    {
+      "ecosystem": "RubyGems",
+      "name": "rack",
+      "version": "3.0.9"
+    },
+    {
+      "ecosystem": "RubyGems",
+      "name": "puma",
+      "version": "6.4.2"
+    },
+    {
+      "ecosystem": "RubyGems",
+      "name": "rspec",
+      "version": "3.13.0",
+      "scope": "dev"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "scope": [
+    "PII-001"
+  ],
+  "expect": [],
+  "forbid": [
+    "PII-001"
+  ],
+  "risk": "示例邮箱（example.com / user@）不应产生噪音"
+}

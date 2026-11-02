@@ -1,0 +1,11 @@
+{
+  "pins": [
+    {
+      "identity": "swift-nio",
+      "location": "https://github.com/apple/swift-nio.git",
+      "state": {
+        "version": "2.65.0"
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# vendored scanner: never commit bytecode
+python/provemark/**/__pycache__/
+python/provemark/**/*.pyc
+
+# local install/debug artifacts
+*.log

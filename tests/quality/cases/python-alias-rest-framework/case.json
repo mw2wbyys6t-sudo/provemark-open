@@ -1,0 +1,1 @@
+{"scope":["AI-012"],"expect":[],"forbid":["AI-012"],"risk":"djangorestframework 的 import 名是 rest_framework，不应误报"}

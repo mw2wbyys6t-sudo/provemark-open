@@ -1,0 +1,11 @@
+{
+  "scope": [
+    "SEC-001",
+    "SEC-017"
+  ],
+  "expect": [
+    "SEC-001"
+  ],
+  "forbid": [],
+  "risk": "真实形态的 OpenAI 密钥必须命中"
+}

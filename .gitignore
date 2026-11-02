@@ -1,0 +1,38 @@
+# 环境变量与密钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# 演示仓库故意保留一个假 .env，用于验证 HYG-005
+!mock-repo/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 扫描产物
+provemark.sarif
+provemark-report.html
+report.html
+fix.md
+
+# 插件打包与本地缓存
+*.tgz
+node_modules/
+plugin/provemark-dsh/dist/
+

@@ -1,0 +1,86 @@
+name: Provemark
+description: >-
+  本地零依赖仓库扫描：原创性与风险——许可证冲突、依赖漏洞、凭据泄漏、敏感数据、
+  AI 代码风险、供应链隐患。输出 SARIF，可直接进 GitHub Code Scanning。
+author: Provemark contributors
+
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  path:
+    description: 要扫描的仓库路径
+    required: false
+    default: "."
+  fail-on:
+    description: 达到该严重度及以上时让 job 失败（none / low / medium / high / critical）
+    required: false
+    default: "high"
+  min-confidence:
+    description: 低于该置信度的问题不参与门禁（0-1）
+    required: false
+    default: "0.5"
+  sarif-file:
+    description: SARIF 输出路径
+    required: false
+    default: "provemark.sarif"
+  upload-sarif:
+    description: 是否上传到 GitHub Code Scanning（需要 security-events write 权限）
+    required: false
+    default: "true"
+  extra-args:
+    description: 追加给 scan 的参数，例如 --offline 或 --sbom sbom.json
+    required: false
+    default: ""
+
+outputs:
+  sarif-path:
+    description: SARIF 文件路径
+    value: ${{ steps.scan.outputs.sarif-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install Provemark
+      shell: bash
+      env:
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -euo pipefail
+        python -m pip install --quiet --disable-pip-version-check \
+          "git+https://github.com/${ACTION_REPOSITORY}@${ACTION_REF}"
+
+    - name: Scan
+      id: scan
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_MIN_CONFIDENCE: ${{ inputs.min-confidence }}
+        INPUT_SARIF: ${{ inputs.sarif-file }}
+        INPUT_EXTRA: ${{ inputs.extra-args }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$(dirname "$INPUT_SARIF")"
+        provemark scan "$INPUT_PATH" \
+          --fail-on "$INPUT_FAIL_ON" \
+          --min-confidence "$INPUT_MIN_CONFIDENCE" \
+          --format sarif \
+          -o "$INPUT_SARIF" \
+          ${INPUT_EXTRA:-}
+        echo "sarif-path=$INPUT_SARIF" >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF
+      if: ${{ inputs.upload-sarif == 'true' }}
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ inputs.sarif-file }}
+        category: provemark

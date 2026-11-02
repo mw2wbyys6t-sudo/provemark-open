@@ -1,0 +1,9 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    rack (3.0.9)
+    puma (6.4.2)
+    rspec (3.13.0)
+
+PLATFORMS
+  ruby

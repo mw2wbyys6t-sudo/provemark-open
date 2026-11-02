@@ -1,0 +1,9 @@
+{
+  "packages": [
+    {
+      "ecosystem": "Julia",
+      "name": "JSON",
+      "version": "0.21.4"
+    }
+  ]
+}

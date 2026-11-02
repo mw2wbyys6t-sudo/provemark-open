@@ -1,0 +1,14 @@
+{
+  "packages": [
+    {
+      "ecosystem": "crates.io",
+      "name": "serde",
+      "version": "1.0.203"
+    },
+    {
+      "ecosystem": "crates.io",
+      "name": "tokio",
+      "version": "1.38.0"
+    }
+  ]
+}

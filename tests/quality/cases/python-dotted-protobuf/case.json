@@ -1,0 +1,1 @@
+{"scope":["AI-012"],"expect":[],"forbid":["AI-012"],"risk":"只声明 protobuf 时，google.protobuf 子路径不应被判为幻觉依赖"}

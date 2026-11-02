@@ -1,0 +1,14 @@
+{
+  "packages": [
+    {
+      "ecosystem": "Hex",
+      "name": "phoenix",
+      "version": "1.7.10"
+    },
+    {
+      "ecosystem": "Hex",
+      "name": "plug",
+      "version": "1.15.3"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "packages": [
+    {
+      "ecosystem": "Conda",
+      "name": "python",
+      "version": "3.11.9"
+    },
+    {
+      "ecosystem": "Conda",
+      "name": "numpy",
+      "version": ""
+    },
+    {
+      "ecosystem": "PyPI",
+      "name": "requests",
+      "version": "2.31.0"
+    }
+  ]
+}

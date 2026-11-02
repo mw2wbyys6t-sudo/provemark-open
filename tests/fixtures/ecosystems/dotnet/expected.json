@@ -1,0 +1,24 @@
+{
+  "packages": [
+    {
+      "ecosystem": "NuGet",
+      "name": "Newtonsoft.Json",
+      "version": "13.0.3"
+    },
+    {
+      "ecosystem": "NuGet",
+      "name": "NUnit",
+      "version": "4.0.1"
+    },
+    {
+      "ecosystem": "NuGet",
+      "name": "Serilog",
+      "version": ""
+    },
+    {
+      "ecosystem": "NuGet",
+      "name": "Dapper",
+      "version": "2.1.35"
+    }
+  ]
+}

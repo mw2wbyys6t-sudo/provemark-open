@@ -1,0 +1,9 @@
+{
+  "dependencies": [
+    "fmt",
+    {
+      "name": "openssl",
+      "version>=": "3.2.1"
+    }
+  ]
+}

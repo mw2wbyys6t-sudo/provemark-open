@@ -1,0 +1,52 @@
+name: Bug report
+description: 报告一个可复现的问题
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。安全漏洞请不要用公开 issue 报告，按 [SECURITY.md](../../SECURITY.md) 私下提交。
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 插件版本（`package.json`）与扫描器版本（`provemark --version`）
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      description: 命令、输入、期望结果与实际结果；能贴最小仓库/最小文件最好
+      placeholder: |
+        1. provemark scan ...
+        2. 期望：...
+        3. 实际：...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关输出
+      description: 命令输出 / JSON 片段 / 插件 marker（`%TEMP%\provemark-dsh-loaded.json`）
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 自查
+      options:
+        - label: 已确认不是密钥/隐私数据（已脱敏）
+          required: true
+        - label: 已尝试 `node scripts/doctor.mjs`

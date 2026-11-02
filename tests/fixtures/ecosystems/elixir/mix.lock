@@ -1,0 +1,4 @@
+%{
+  "phoenix": {:hex, :phoenix, "1.7.10", "hash", [:mix], [], "hexpm"},
+  "plug": {:hex, :plug, "1.15.3", "hash", [:mix], [], "hexpm"}
+}

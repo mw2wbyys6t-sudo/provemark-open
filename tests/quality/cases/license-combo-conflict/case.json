@@ -1,0 +1,13 @@
+{
+  "scope": [
+    "LIC-009"
+  ],
+  "expect": [
+    "LIC-009"
+  ],
+  "forbid": [],
+  "licenses": {
+    "PyPI:requests@2.31.0": "Apache-2.0"
+  },
+  "risk": "GPL-2.0-only 项目引入 Apache-2.0 依赖是确定的组合冲突（专利条款不兼容），必须报出来"
+}

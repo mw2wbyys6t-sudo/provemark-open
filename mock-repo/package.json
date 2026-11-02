@@ -1,0 +1,9 @@
+{
+  "name": "mock-service-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "lodahs": "^4.17.0",
+    "left-pad": "*"
+  }
+}

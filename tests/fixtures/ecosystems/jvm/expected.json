@@ -1,0 +1,42 @@
+{
+  "packages": [
+    {
+      "ecosystem": "Maven",
+      "name": "org.springframework:spring-core",
+      "version": "6.1.5"
+    },
+    {
+      "ecosystem": "Maven",
+      "name": "org.junit.jupiter:junit-jupiter",
+      "version": "",
+      "scope": "dev"
+    },
+    {
+      "ecosystem": "Maven",
+      "name": "com.example:web",
+      "version": "1.2.3"
+    },
+    {
+      "ecosystem": "Maven",
+      "name": "junit:junit",
+      "version": "4.13.2",
+      "scope": "dev"
+    },
+    {
+      "ecosystem": "Maven",
+      "name": "com.squareup.retrofit2:retrofit",
+      "version": "2.11.0"
+    },
+    {
+      "ecosystem": "Maven",
+      "name": "org.scalatest:scalatest",
+      "version": "3.2.19",
+      "scope": "dev"
+    },
+    {
+      "ecosystem": "Maven",
+      "name": "org.clojure:clojure",
+      "version": "1.11.1"
+    }
+  ]
+}

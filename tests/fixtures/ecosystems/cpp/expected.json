@@ -1,0 +1,19 @@
+{
+  "packages": [
+    {
+      "ecosystem": "vcpkg",
+      "name": "openssl",
+      "version": "3.2.1"
+    },
+    {
+      "ecosystem": "vcpkg",
+      "name": "fmt",
+      "version": ""
+    },
+    {
+      "ecosystem": "ConanCenter",
+      "name": "zlib",
+      "version": "1.2.13"
+    }
+  ]
+}

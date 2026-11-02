@@ -1,0 +1,48 @@
+# provemark-dsh — always-on repository guardrail + optional skill.
+#
+# Row 1 mounts the Host plugin: a static system-prompt section with the rules
+# the scanner enforces, a dynamic context block carrying the last scan of the
+# workspace, two native tools (provemark_guard / provemark_scan), and background
+# scans after tool activity. Row 2 mounts the packaged skill for deep workflows.
+#
+# Tune everything from your own patch layer instead of editing this file:
+#
+#   - id: provemark-guard
+#     config:
+#       autoScan: true            # background scans on tool activity / first step
+#       offline: false            # default: query OSV + deps.dev, so you get real answers
+#       autoFix: preview          # off | preview | apply (apply only creates missing files)
+#       maxFindings: 5
+#       autoScanIntervalMs: 120000
+#       timeoutMs: 60000          # background scan budget (online lookups are slower)
+#       toolTimeoutMs: 120000     # explicit tool-call budget
+#       injectOnNewRisk: true     # queue an inbox notice on new high/critical findings
+#       workspace: ""             # force a root instead of the session working directory
+#
+# The network is the point: without it, dependency vulnerabilities and licenses
+# are reported as "unverified" and the score is marked as partial. Set
+# `offline: true` only for air-gapped machines or when the user asks for it.
+- insert:
+    - id: provemark-guard
+      name: 'provemark-dsh'
+      config:
+        enabled: true
+        autoScan: true
+        offline: false
+        autoFix: preview
+        maxFindings: 5
+        autoScanIntervalMs: 120000
+        timeoutMs: 60000
+        toolTimeoutMs: 120000
+        injectOnNewRisk: true
+
+    # Opt-in Provemark filesystem Skill provider for DeepSeek Harness.
+    # Resolves the packaged Skill root from the installed npm identity anchored
+    # at the DSH profile (Loader baseUrl), never as a path concatenated onto
+    # baseUrl.
+    - id: provemark-skill-filesystem
+      name: '@deepseek-ai/dsh-skill-filesystem'
+      config:
+        providerName: provemark-plugin
+        includeDefaultRoots: false
+        bundledSkillDir: !!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('provemark-dsh/package.json')), 'skills')

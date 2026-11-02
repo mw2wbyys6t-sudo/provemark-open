@@ -1,0 +1,10 @@
+{
+  "scope": [
+    "AI-012"
+  ],
+  "expect": [],
+  "forbid": [
+    "AI-012"
+  ],
+  "risk": "已声明 google-cloud-bigquery 时，google.cloud.bigquery 不应被判为幻觉依赖"
+}

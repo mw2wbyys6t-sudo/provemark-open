@@ -1,0 +1,54 @@
+{
+  "name": "provemark-dsh",
+  "version": "0.6.1",
+  "description": "DeepSeek Harness skill bundle for Provemark（源印）— local, zero-dependency originality & risk scanning: license combination conflicts, vulnerable dependencies, leaked credentials, PII, AI-code risks, supply chain and repo hygiene.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate.mjs",
+    "selftest": "node scripts/selftest.mjs",
+    "sync": "node scripts/sync-vendor.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "stress": "node scripts/stress.mjs",
+    "release": "node scripts/release.mjs"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "provemark-dsh": "./bin/provemark.mjs"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "cordis.patch.yml",
+    "skills",
+    "python",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "agent-skill",
+    "provemark",
+    "security",
+    "license-compliance",
+    "sbom",
+    "secrets",
+    "pii",
+    "supply-chain",
+    "ai-code"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

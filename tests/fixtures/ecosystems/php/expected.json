@@ -1,0 +1,20 @@
+{
+  "packages": [
+    {
+      "ecosystem": "Packagist",
+      "name": "monolog/monolog",
+      "version": "3.5.0"
+    },
+    {
+      "ecosystem": "Packagist",
+      "name": "guzzlehttp/guzzle",
+      "version": "7.8.1"
+    },
+    {
+      "ecosystem": "Packagist",
+      "name": "phpunit/phpunit",
+      "version": "10.5.20",
+      "scope": "dev"
+    }
+  ]
+}

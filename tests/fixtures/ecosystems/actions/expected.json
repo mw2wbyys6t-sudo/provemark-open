@@ -1,0 +1,9 @@
+{
+  "packages": [
+    {
+      "ecosystem": "GitHub Actions",
+      "name": "actions/checkout",
+      "version": ""
+    }
+  ]
+}

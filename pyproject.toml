@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "provemark"
+version = "0.4.0"
+description = "源印：面向 AI 编码时代的本地仓库原创性与风险扫描器，任意技术栈（许可证组合 / 依赖漏洞 / 凭据 / 敏感数据 / AI 代码风险 / 供应链）"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Provemark Contributors" }]
+keywords = [
+  "security",
+  "license",
+  "sbom",
+  "supply-chain",
+  "ai-code",
+  "linter",
+  "pii",
+  "provenance",
+  "compliance",
+  "github-actions",
+  "multi-ecosystem",
+  "maven",
+  "nuget",
+  "composer",
+  "rubygems",
+  "pub",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: Apache Software License",
+  "Topic :: Software Development :: Quality Assurance",
+  "Environment :: Console",
+]
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6"]
+
+[project.scripts]
+provemark = "provemark.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["provemark*"]

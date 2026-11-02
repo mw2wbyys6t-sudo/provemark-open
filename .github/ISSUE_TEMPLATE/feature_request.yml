@@ -1,0 +1,36 @@
+name: Feature request
+description: 建议一个能力或规则
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 场景、当前的痛点、希望工具怎么做
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案（可选）
+      description: 新规则/新命令/输出变化，能给出误报与漏报的边界更好
+  - type: dropdown
+    id: area
+    attributes:
+      label: 领域
+      options:
+        - 规则（真阳性/误报）
+        - CLI / 报告
+        - DSH 插件 / 技能
+        - 文档
+        - 其他
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 自查
+      options:
+        - label: 我确认这不是一个安全漏洞（漏洞按 SECURITY.md 私下报告）
+          required: true

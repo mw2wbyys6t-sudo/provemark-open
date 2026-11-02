@@ -1,0 +1,79 @@
+[project]
+kind = "library"
+license = "Apache-2.0"
+
+[scan]
+max_file_bytes = 1500000
+exclude = [
+  # 规则文件里本身就是“像密钥的示例”和正则，属于已知误报源
+  "provemark/rules/**",
+  # 漏洞扫描器自身就是一组高危模式正则，扫描它会自命中
+  "provemark/scanners/security.py",
+  # 插件里的扫描器是逐字节副本（tests/test_plugin.py 守着零漂移），不重复审计
+  "plugin/provemark-dsh/python/**",
+  # 插件的 CLI 脚本用 console.log 作为正常输出（不是调试残留），单独看没有意义
+  "plugin/provemark-dsh/scripts/**",
+  "plugin/provemark-dsh/bin/**",
+  "docs/**",
+  # 多生态解析 fixture 是刻意构造的最小样本，不参与自身仓库的依赖扫描
+  "tests/fixtures/**",
+  # 检测质量用例里刻意放了假密钥/仿冒包名，属于标注样本
+  "tests/quality/**",
+  # 漏洞规则测试文件本身就是一堆故意写坏的片段，不参与自身仓库评分
+  "tests/test_security_scanner.py",
+  # 工程规则测试文件里是刻意写出的反模式样本（无超时请求、循环 await、print 等）
+  "tests/test_engineering_rules.py",
+  # 演示仓库故意做坏，用于展示扫描效果，不参与自身仓库的门禁
+  "mock-repo/**",
+  "provemark.sarif",
+  "provemark-report.html",
+]
+
+[gate]
+fail_on = "high"
+
+[license]
+# 默认策略已在代码中给出，这里只覆盖需要强调的部分
+unknown = "medium"
+
+[[ignore]]
+rule = "SEC-001"
+path = "tests/**"
+reason = "测试中刻意写入的假密钥，用于验证脱敏逻辑，不是真实凭据"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "PII-003"
+path = "tests/**"
+reason = "证件号校验测试向量（NRIC/NIK/MyKad 等），用于验证辖区校验位，不是真实个人信息"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "PII-004"
+path = "tests/**"
+reason = "Luhn 校验测试向量（官方测试卡号），不是真实支付凭证"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "PII-006"
+path = "tests/**"
+reason = "测试用例故意在日志调用里插值 PII，用于验证 PII-006 判定"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "PII-001"
+path = "tests/**"
+reason = "邮箱格式与占位符降噪的测试数据（含保留域名样例），不是真实联系人"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "PII-002"
+path = "tests/**"
+reason = "手机号格式校验的测试数据，不是真实号码"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "AI-001"
+path = "tests/**"
+reason = "占位密钥/高熵串的测试向量，用于验证 SEC-017 与降噪逻辑"
+expires = "2027-12-31"

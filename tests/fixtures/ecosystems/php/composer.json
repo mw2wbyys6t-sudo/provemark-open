@@ -1,0 +1,11 @@
+{
+  "name": "example/fixture-php",
+  "type": "project",
+  "require": {
+    "monolog/monolog": "^3.5",
+    "guzzlehttp/guzzle": "7.8.1"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "scope": [
+    "AI-012"
+  ],
+  "expect": [],
+  "forbid": [
+    "AI-012"
+  ],
+  "risk": "Pillow/python-multipart/scikit-learn 的 import 名与包名不同，不应误报"
+}

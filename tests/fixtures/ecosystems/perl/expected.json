@@ -1,0 +1,9 @@
+{
+  "packages": [
+    {
+      "ecosystem": "CPAN",
+      "name": "Plack",
+      "version": "1.0047"
+    }
+  ]
+}

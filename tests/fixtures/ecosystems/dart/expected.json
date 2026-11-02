@@ -1,0 +1,20 @@
+{
+  "packages": [
+    {
+      "ecosystem": "Pub",
+      "name": "http",
+      "version": "1.2.1"
+    },
+    {
+      "ecosystem": "Pub",
+      "name": "provider",
+      "version": "6.1.2"
+    },
+    {
+      "ecosystem": "Pub",
+      "name": "async",
+      "version": "2.11.0",
+      "indirect": true
+    }
+  ]
+}

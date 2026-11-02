@@ -1,0 +1,13 @@
+packages:
+  http:
+    dependency: "direct main"
+    description:
+      name: http
+    source: hosted
+    version: "1.2.1"
+  async:
+    dependency: transitive
+    description:
+      name: async
+    source: hosted
+    version: "2.11.0"

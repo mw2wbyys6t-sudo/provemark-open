@@ -1,0 +1,10 @@
+{
+  "scope": [
+    "SCP-004"
+  ],
+  "expect": [
+    "SCP-004"
+  ],
+  "forbid": [],
+  "risk": "把 lodash 拼成 lodahs 时必须提示仿冒/拼写错误"
+}

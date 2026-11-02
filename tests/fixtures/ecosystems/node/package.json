@@ -1,0 +1,9 @@
+{
+  "name": "fixture-node",
+  "dependencies": {
+    "lodash": "^4.17.0"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0"
+  }
+}

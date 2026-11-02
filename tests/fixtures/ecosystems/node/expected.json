@@ -1,0 +1,20 @@
+{
+  "packages": [
+    {
+      "ecosystem": "npm",
+      "name": "lodash",
+      "version": "4.17.21"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "vitest",
+      "version": "1.6.0",
+      "scope": "dev"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "oak",
+      "version": "12.6.1"
+    }
+  ]
+}

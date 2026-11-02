@@ -1,0 +1,10 @@
+{
+  "scope": [
+    "AI-012"
+  ],
+  "expect": [],
+  "forbid": [
+    "AI-012"
+  ],
+  "risk": "包内子模块（requests.adapters）不应被当成未声明依赖"
+}

@@ -1,0 +1,86 @@
+name: provemark
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    name: test · py${{ matrix.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install test extras
+        run: python -m pip install "PyYAML>=6"
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Plugin checks (validate / selftest / vendor sync)
+        if: matrix.python-version == '3.12'
+        run: |
+          node --version
+          node plugin/provemark-dsh/scripts/validate.mjs
+          node plugin/provemark-dsh/scripts/selftest.mjs
+          node plugin/provemark-dsh/scripts/sync-vendor.mjs --check
+      - name: Self scan (offline)
+        run: python -m provemark scan . --offline --fail-on high
+
+  fixtures:
+    runs-on: ubuntu-latest
+    outputs:
+      names: ${{ steps.list.outputs.names }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        name: List ecosystem fixtures
+        run: |
+          set -euo pipefail
+          names=$(python3 -c "import json,pathlib;print(json.dumps(sorted(p.name for p in pathlib.Path('tests/fixtures/ecosystems').iterdir() if p.is_dir())))")
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+
+  parsers:
+    needs: fixtures
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: ${{ fromJSON(needs.fixtures.outputs.names) }}
+    name: parse · ${{ matrix.fixture }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Parse ${{ matrix.fixture }} fixture
+        env:
+          FIXTURE: ${{ matrix.fixture }}
+        run: python -m unittest discover -s tests -p "test_fixtures.py" -v
+
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install .
+      - name: Scan
+        run: provemark scan --fail-on high --min-confidence 0.5 --format sarif -o provemark.sarif
+      - name: Upload SARIF
+        if: always()
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: provemark.sarif
