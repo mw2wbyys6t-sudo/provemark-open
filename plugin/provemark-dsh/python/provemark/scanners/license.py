@@ -5,8 +5,6 @@ import re
 import tomllib
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-from typing import Any
 
 from ..models import Finding, Package
 from ..net import NetworkError, http_json, http_text

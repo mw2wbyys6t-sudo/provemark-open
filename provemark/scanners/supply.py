@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
 
 from ..models import Finding
 from ..rules.popular import KNOWN_MALICIOUS, POPULAR

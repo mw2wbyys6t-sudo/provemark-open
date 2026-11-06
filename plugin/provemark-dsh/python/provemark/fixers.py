@@ -12,7 +12,6 @@ from pathlib import Path
 from . import __version__
 from .config import DEFAULT_CONFIG_TEMPLATE, Config, find_config_file
 from .models import ScanResult
-from .net import NetworkError, http_json
 from .rules import license_data
 from .rules.license_texts import APACHE2_TEXT
 
