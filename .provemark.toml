@@ -77,3 +77,15 @@ rule = "AI-001"
 path = "tests/**"
 reason = "占位密钥/高熵串的测试向量，用于验证 SEC-017 与降噪逻辑"
 expires = "2027-12-31"
+
+[[ignore]]
+rule = "SEC-017"
+path = "tests/**"
+reason = "高熵字符串测试向量（如签名密钥样例），用于验证检测阈值，不是真实凭据"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "AI-008"
+path = "tests/**"
+reason = "测试样本字符串里刻意写入的 print/console.log（如 Go fixture 的 fmt.Println），不是本项目调试残留"
+expires = "2027-12-31"

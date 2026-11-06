@@ -233,14 +233,6 @@ def _as_list(value: Any, key: str) -> list[str]:
     return list(value)
 
 
-def _as_bool(value: Any, key: str, default: bool) -> bool:
-    if value is None:
-        return default
-    if not isinstance(value, bool):
-        raise ConfigError(f"`{key}` 必须是 true / false")
-    return value
-
-
 SEVERITY_VALUES = ("critical", "high", "medium", "low", "info")
 GATE_VALUES = ("none",) + SEVERITY_VALUES
 PROJECT_KINDS = ("library", "app", "docs")
