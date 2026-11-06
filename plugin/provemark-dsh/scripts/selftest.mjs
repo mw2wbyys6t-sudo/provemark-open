@@ -139,7 +139,10 @@ try {
   failures.push(`apply() threw: ${String(error?.stack ?? error)}`);
 }
 
-await sleep(300);
+// Tool registration is asynchronous: the plugin imports the host tool module
+// before it can call `register()`. A fixed sleep makes this check a race that
+// fails on slow machines and passes on fast ones — wait for the event instead.
+await waitFor(() => registered.tools.length === 2, { timeoutMs: 30_000, intervalMs: 100 });
 
 check(registered.sections.length === 1, 'registers exactly one system-prompt section');
 check(registered.contexts.length === 1, 'registers exactly one dynamic prompt context');
