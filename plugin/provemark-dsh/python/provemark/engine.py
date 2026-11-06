@@ -57,7 +57,7 @@ def run_scan(
 
     collected, file_notes = files.collect_files(root, config)
     deps_result = deps.collect(root, config)
-    cache = _build_cache(config)
+    cache = _build_cache()
     staged: set[str] | None = None
     if staged_only:
         staged_list = vcs.staged_files(root)
@@ -150,10 +150,10 @@ def _enabled(name: str, only: list[str] | None, skip: list[str] | None) -> bool:
     return True
 
 
-def _build_cache(config: Config):
+def _build_cache():
     from .cache import Cache
 
-    return Cache(enabled=True)
+    return Cache()
 
 
 def _apply_overrides(findings: list[Finding], config: Config) -> list[Finding]:
