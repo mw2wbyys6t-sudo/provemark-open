@@ -80,10 +80,13 @@ ALIASES = {
     "apache2": "Apache-2.0",
     "apache-2.0": "Apache-2.0",
     "asl 2.0": "Apache-2.0",
+    "apache software license": "Apache-2.0",
+    "the apache software license": "Apache-2.0",
     "mit license": "MIT",
     "mit-license": "MIT",
     "the mit license": "MIT",
     "bsd": "BSD-3-Clause",
+    "bsd license": "BSD-3-Clause",
     "bsd 3-clause": "BSD-3-Clause",
     "bsd-3": "BSD-3-Clause",
     "new bsd": "BSD-3-Clause",
@@ -94,8 +97,20 @@ ALIASES = {
     "gpl-2": "GPL-2.0-only",
     "lgplv3": "LGPL-3.0-only",
     "agplv3": "AGPL-3.0-only",
+    # PyPI 元数据与 deps.dev 常见的整句写法（含 setuptools 默认值）。
+    "gnu general public license v2": "GPL-2.0-only",
+    "gnu general public license v2 or later": "GPL-2.0-or-later",
+    "gnu general public license v3": "GPL-3.0-only",
+    "gnu general public license v3 or later": "GPL-3.0-or-later",
+    "gnu lesser general public license v2.1": "LGPL-2.1-only",
+    "gnu lesser general public license v2.1 or later": "LGPL-2.1-or-later",
+    "gnu lesser general public license v3": "LGPL-3.0-only",
+    "gnu lesser general public license v3 or later": "LGPL-3.0-or-later",
+    "gnu affero general public license v3": "AGPL-3.0-only",
+    "gnu affero general public license v3 or later": "AGPL-3.0-or-later",
     "mpl2": "MPL-2.0",
     "mpl 2.0": "MPL-2.0",
+    "mozilla public license 2.0": "MPL-2.0",
     "isc license": "ISC",
     "unlicense": "Unlicense",
     "the unlicense": "Unlicense",
@@ -148,6 +163,11 @@ def normalize_spdx(value: str) -> str:
     text = (value or "").strip()
     if not text:
         return ""
+    # 括号里常常只是缩写（"GNU General Public License v3 (GPLv3)"），
+    # 先去掉这部分再查表，否则整句写法永远匹配不上别名。
+    without_note = re.sub(r"\s*\([^()]*\)\s*$", "", text).strip()
+    if without_note:
+        text = without_note
     text = re.sub(r"^\(|\)$", "", text)
     lowered = text.lower()
     if lowered in ALIASES:

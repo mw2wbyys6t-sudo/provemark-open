@@ -3,7 +3,20 @@
   "version": "0.6.2",
   "description": "DeepSeek Harness skill bundle for Provemark（源印）— local, zero-dependency originality & risk scanning: license combination conflicts, vulnerable dependencies, leaked credentials, PII, AI-code risks, supply chain and repo hygiene.",
   "license": "Apache-2.0",
+  "author": "Provemark Contributors",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mw2wbyys6t-sudo/provemark-open.git",
+    "directory": "plugin/provemark-dsh"
+  },
+  "homepage": "https://github.com/mw2wbyys6t-sudo/provemark-open/tree/main/plugin/provemark-dsh",
+  "bugs": {
+    "url": "https://github.com/mw2wbyys6t-sudo/provemark-open/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "validate": "node scripts/validate.mjs",
     "selftest": "node scripts/selftest.mjs",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 from pathlib import Path
 
 from ..models import Finding
@@ -17,11 +19,16 @@ CREDENTIAL_SUFFIXES = (
     ".ppk",
     ".ovpn",
 )
+# 私钥文件名本身就说明问题，不需要看内容。
 CREDENTIAL_NAMES = (
     "id_rsa",
     "id_dsa",
     "id_ecdsa",
     "id_ed25519",
+)
+# 这些是「存放凭据的配置文件」，但仓库里更常见的是没写凭据的普通配置
+# （例如只写了 package-lock=false 的 .npmrc），必须看内容再判断。
+CREDENTIAL_CONFIG_NAMES = (
     ".npmrc",
     ".pypirc",
     ".netrc",
@@ -29,6 +36,47 @@ CREDENTIAL_NAMES = (
     "credentials.json",
     "secrets.json",
     "service-account.json",
+)
+MAX_CREDENTIAL_FILE_BYTES = 256 * 1024
+# 测试目录里的私钥多半是测试夹具（例如过期的测试证书），但仍要报出来让人判断，
+# 只是不该按「真实泄漏」的最高级别计分——否则一个测试目录就能把整个仓库打成 F。
+TEST_CREDENTIAL_CONFIDENCE = 0.4
+TEST_PATH_TOKENS = ("tests", "test", "spec", "fixtures", "__tests__")
+
+
+def _is_test_path(rel: str) -> bool:
+    lowered = rel.lower()
+    parts = lowered.split("/")
+    if any(token in parts for token in TEST_PATH_TOKENS):
+        return True
+    return "/fixtures/" in lowered or bool(re.search(r"(^test_|_test\.|\.test\.|\.spec\.)", Path(lowered).name))
+
+
+def _credential_severity(rel: str) -> str:
+    return "high" if _is_test_path(rel) else "critical"
+
+
+def _credential_confidence(rel: str) -> dict[str, float]:
+    return {"confidence": TEST_CREDENTIAL_CONFIDENCE} if _is_test_path(rel) else {}
+
+
+NPMRC_CREDENTIAL = re.compile(
+    r"(?i)(?:^|[\s:/])(?:_authtoken|_auth|_password|password|auth)[ \t]*=[ \t]*(?P<value>\S+)"
+)
+PYPIRC_CREDENTIAL = re.compile(
+    r"(?im)^[ \t]*(?:password|passwd|_password|api_?key|apikey|token|secret|passphrase)"
+    r"[ \t]*[=:][ \t]*(?P<value>\S+)"
+)
+NETRC_CREDENTIAL = re.compile(
+    r"(?im)^[ \t]*(?:machine\b[^\n]*?\bpassword\b[ \t]+|password\b[ \t]+)(?P<value>\S+)"
+)
+HTPASSWD_CREDENTIAL = re.compile(r"(?m)^(?!#)[^:\s]+:(?P<value>[^\s:]+)[ \t]*$")
+JSON_SECRET_KEY = re.compile(
+    r"(?i)token|password|passwd|secret|api_?key|private_?key|access_?key|credential|passphrase"
+)
+JSON_SECRET_ASSIGN = re.compile(
+    r"(?i)\"[^\"]*(?:token|password|passwd|secret|api_?key|private_?key|access_?key|credential|passphrase)"
+    r"[^\"]*\"[ \t]*:[ \t]*\"(?P<value>[^\"]+)\""
 )
 VENDOR_DIRS = (
     "node_modules/",
@@ -113,6 +161,110 @@ def _find_license_file(ctx: Context) -> str:
     return ""
 
 
+# 安全披露文件不一定叫 SECURITY.md：大小写不统一（.github/security.md）、
+# 放在 .github/ 下、或者用 .txt / .rst 都很常见，按名字找会漏。
+SECURITY_NAMES = ("SECURITY.md", "SECURITY.txt", "SECURITY.rst", "SECURITY")
+SECURITY_DIRS = (".github",)
+SECURITY_NAME_SET = {name.lower() for name in SECURITY_NAMES}
+
+
+def _find_security_policy(ctx: Context) -> str:
+    for base in (ctx.root, *(ctx.root / name for name in SECURITY_DIRS)):
+        for name in sorted(_root_names(base)):
+            if name.lower() in SECURITY_NAME_SET:
+                return name
+    return ""
+
+
+# 测试文件的命名远不止 tests/ 目录：node --test 用的 test.js、test-utils.ts
+# 这类「文件名本身是 test-*」的写法以前都算不到，会把有测试的仓库报成没测试。
+TEST_BASENAMES = (
+    "test.js",
+    "test.ts",
+    "test.mjs",
+    "test.cjs",
+    "test.py",
+    "test.rb",
+    "test.go",
+    "test.rs",
+    "test.java",
+)
+TEST_PREFIXED = re.compile(
+    r"^test[-.][\w.-]*\.(?:js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java)$", re.IGNORECASE
+)
+
+
+def _is_test_file(rel: str) -> bool:
+    name = Path(rel).name
+    lowered = name.lower()
+    if "/tests/" in rel or rel.startswith("tests/") or lowered.startswith("test_"):
+        return True
+    if ".test." in lowered or ".spec." in lowered:
+        return True
+    if lowered in TEST_BASENAMES:
+        return True
+    return bool(TEST_PREFIXED.match(lowered))
+
+
+def _json_has_credential(text: str) -> bool:
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return bool(JSON_SECRET_ASSIGN.search(text))
+    return _json_credential(payload)
+
+
+def _json_credential(node) -> bool:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
+            if JSON_SECRET_KEY.search(normalized) and _json_value_present(value):
+                return True
+            if _json_credential(value):
+                return True
+        return False
+    if isinstance(node, list):
+        return any(_json_credential(item) for item in node)
+    return False
+
+
+def _json_value_present(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (dict, list)):
+        return bool(value)
+    return True
+
+
+def _holds_credential(name: str, text: str) -> bool:
+    """配置文件里是否真的写了凭据。"""
+    if not text.strip():
+        return False
+    if name == ".npmrc":
+        return bool(NPMRC_CREDENTIAL.search(text))
+    if name == ".pypirc":
+        return bool(PYPIRC_CREDENTIAL.search(text))
+    if name == ".netrc":
+        return bool(NETRC_CREDENTIAL.search(text))
+    if name == ".htpasswd":
+        return bool(HTPASSWD_CREDENTIAL.search(text))
+    return _json_has_credential(text)
+
+
+def _credential_material(root: Path, rel: str) -> bool | None:
+    """读取凭据配置文件内容；读不到时返回 None（无法判断，按泄漏处理）。"""
+    path = root / rel
+    try:
+        if path.stat().st_size > MAX_CREDENTIAL_FILE_BYTES:
+            return None
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return _holds_credential(Path(rel).name, text)
+
+
 def scan(ctx: Context) -> list[Finding]:
     findings: list[Finding] = []
     root_names = _root_names(ctx.root)
@@ -152,7 +304,7 @@ def scan(ctx: Context) -> list[Finding]:
             )
         )
 
-    if "SECURITY.md" not in root_names and kind != "docs":
+    if not _find_security_policy(ctx) and kind != "docs":
         findings.append(
             make_finding(
                 "HYG-003",
@@ -225,13 +377,29 @@ def scan(ctx: Context) -> list[Finding]:
                     make_finding(
                         "HYG-007",
                         "secrets",
-                        "critical",
+                        _credential_severity(rel),
                         "凭据或私钥文件已被提交",
                         "私钥类文件一旦进入版本库就应视为泄漏，即使后续删除也仍在历史中。",
                         path=rel,
                         remediation="吊销对应凭据、从版本库移除并清理历史。",
+                        **_credential_confidence(rel),
                     )
                 )
+            elif name in CREDENTIAL_CONFIG_NAMES:
+                holds = _credential_material(ctx.root, rel)
+                if holds is not False:
+                    findings.append(
+                        make_finding(
+                            "HYG-007",
+                            "secrets",
+                            _credential_severity(rel),
+                            "凭据或私钥文件已被提交",
+                            "该配置文件里确实写了认证凭据，一旦进入版本库就应视为泄漏。",
+                            path=rel,
+                            remediation="吊销对应凭据、从版本库移除并清理历史。",
+                            **_credential_confidence(rel),
+                        )
+                    )
             if lowered.startswith(VENDOR_DIRS) or "/node_modules/" in lowered or "/__pycache__/" in lowered:
                 findings.append(
                     make_finding(
@@ -287,7 +455,7 @@ def scan(ctx: Context) -> list[Finding]:
     test_like = [
         f
         for f in (tracked if tracked is not None else [item.rel for item in ctx.files])
-        if "/tests/" in f or f.startswith("tests/") or Path(f).name.startswith("test_") or ".test." in f or ".spec." in f
+        if _is_test_file(f)
     ]
     if not test_like:
         findings.append(

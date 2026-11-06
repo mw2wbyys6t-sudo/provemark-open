@@ -7,6 +7,18 @@
   断网时自动降级为「未验证」并在结论里明说，不会假装没有漏洞；
 - 118 条规则 / 8 个维度 / 19 个生态；报告支持 table / JSON / Markdown / SARIF / 单文件 HTML。
 
+## 真实效果（在真实仓库上实测）
+
+插件跑的是同一套引擎，所以下面这些数字对 CLI 和插件都成立：
+
+| 仓库 | 扫描结果 |
+| --- | --- |
+| `tiangolo/fastapi` | 2984 个文件、228 个依赖，命中 **6 个真实 OSV 漏洞**（dnspython / joserfc / mcp / pyasn1 / pillow / fastmcp-slim，含 4 个高危）——全部来自 `uv.lock` 里的锁定版本 |
+| `pallets/click` | 3 个**致命**依赖漏洞（anyio / certifi / uv），附可直接执行的升级命令 |
+| `sindresorhus/slugify` | 97 / 100（A）：只剩「没锁文件」「Action 未固定 SHA」这类真实待办，没有误报 |
+
+没有锁文件解析时，fastapi 这类仓库会被报成「79 个依赖版本无法确定」，漏洞维度全空——**这类结论在版本未知时根本不可能出现**。
+
 ## 它做了什么
 
 | 组成 | 机制 | 效果 |
@@ -33,6 +45,16 @@
 ## 安装
 
 profile 目录默认 `%USERPROFILE%\.dsh\profiles\<profile>`（macOS/Linux: `~/.dsh/profiles/<profile>`）。
+
+**官方方式（DSH CLI 登记 bundle）**：
+
+```bash
+dsh plugin --profile web add "github:mw2wbyys6t-sudo/provemark-open#path:/plugin/provemark-dsh"
+```
+
+本包是**纯 JS、无构建步骤**，所以 pnpm 不需要额外批准任何构建脚本（`allowBuilds`），装完即可用。
+
+**随包安装脚本**：
 
 ```pwsh
 node .\plugin\provemark-dsh\scripts\install.mjs            # 默认 desktop，或唯一的 profile

@@ -5,6 +5,49 @@
 
 ## [未发布]
 
+### 新增（Python 锁文件解析：让漏洞检查真正跑起来）
+
+- **`uv.lock` / `poetry.lock` / `pdm.lock` / `Pipfile.lock` 解析器**。此前 `ecosystems.py` 把这四个文件列为锁文件，
+  却没有对应解析器——于是 `uv.lock` 锁了 213 个包的 fastapi 被报成「79 个依赖版本无法确定」「没有锁文件」，
+  漏洞维度全空。现在能解析出 228 个依赖，命中 6 个真实 OSV 漏洞（4 个高危）。
+- 锁文件里的非 registry 来源（git / url / path）打上 `url:` / `file:` 前缀，不进 OSV 查询。
+- 锁文件依赖标记为间接依赖（`direct=False`），避免 typosquat 规则全量误报。
+
+### 修复（误报治理：真实仓库暴露出来的假警报）
+
+- **HYG-007 按内容判定**。此前 `.npmrc` / `.pypirc` / `.netrc` / `credentials.json` 等凭据文件**只看文件名**，
+  于是只写了 `package-lock=false` 的 `.npmrc` 被判「致命：凭据泄漏」。现在读取内容，确实有 token/password 才报；
+  私钥文件名与私钥后缀仍无条件报。
+- **测试目录里的凭据降级**。`tests/certs/**` 里的过期测试证书此前按真实泄漏计致命，能把整个仓库打成 0 分 F。
+  现在降为「高危 · 需人工确认」，仍然报出来；仓库外的真实凭据保持致命。
+- **SPDX 别名补齐**。PyPI 元数据里的 `BSD License` / `Apache Software License` / `GNU General Public License v3`
+  之前无法归一化，导致已知许可证被报成「无法确定」。
+- **PII-004 语境感知**。19 位数字（LinkedIn ID 之类）恰好过 Luhn 就被判「银行卡号，建议立即轮换支付凭证」——
+  现在 URL、路径、提交 SHA 里的数字不报。
+- **HYG-003 大小写与子目录**。`.github/security.md` 此前被判「缺少 SECURITY.md」。
+- **HYG-011 测试文件识别**。`test.js` 这类命名此前匹配不到，会误报「没有找到测试文件」。
+
+### 修复（生成物不该违反自己的规则）
+
+- `init` 生成的 CI 模板此前用 `actions/checkout@v4`、`upload-sarif@v3`（**v3 已被 GitHub 退役**），
+  而且用工具自己扫会命中 3 条 `SCP-007`。现在全部固定到 commit SHA 并升级到 `upload-sarif` v4。
+- `init` 生成的安装来源此前是 `pip install provemark`，而 PyPI 上并没有这个包（CI 第一步必失败）。
+  现在指向可用的 git 标签，并保留注释说明将来上架后如何改回。
+- 仓库自带 composite Action 的依赖同样固定到 SHA。
+- `fix --only` 增加合法值校验：拼错时明确报错并列出可选值，不再静默什么都不做。
+
+### 修复（插件）
+
+- **自检竞态**：工具注册是异步的（先动态导入宿主工具模块），自检却固定 `sleep(300)`，
+  慢机器上必然失败——同一份代码在 Python 测试里通过、命令行跑却失败。改用确定性等待。
+- `package.json` 补齐发布字段：`author` / `repository` / `homepage` / `bugs` / `publishConfig.access`。
+
+### 文档
+
+- README 重写：突出 DSH 插件定位（结论直接进上下文，**423 字符**替代模型自行翻找文件的开销），
+  并加入**真实开源仓库的实测案例**（fastapi / click / slugify）与误报治理对照表。
+- 架构图与技能文档里的规则数改为实测值（AI 25 条）。
+
 ## [0.6.2] - 2026-11-02
 
 ### 修复（GitHub CI 红叉 + README 图文示例）

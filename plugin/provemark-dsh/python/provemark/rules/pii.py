@@ -21,7 +21,22 @@ SG_NRIC = re.compile(r"\b([STFGM])(\d{7})([A-Z])\b")
 DIGITS_13 = re.compile(r"(?<!\d)(\d{13})(?!\d)")
 DIGITS_16 = re.compile(r"(?<!\d)(\d{16})(?!\d)")
 DIGITS_12 = re.compile(r"(?<!\d)(\d{12})(?!\d)")
-CARD = re.compile(r"(?<![\d])((?:\d[ -]?){12,18}\d)(?![\d])")
+CARD_PATTERN = re.compile(r"(?<![\d])((?:\d[ -]?){12,18}\d)(?![\d])")
+# 卡号只靠 Luhn 判定会误伤：13–19 位数字在现实里更常见的身份是订单号、
+# 业务 ID、URL 里的主键、commit SHA。先按数字形态匹配，再看它出现在什么语境。
+URL_SPAN = re.compile(r"(?i)\b[a-z][a-z0-9+.\-]*://[^\s\"'<>)\]]+")
+MARKDOWN_TARGET = re.compile(r"\]\(([^()\s]*)\)")
+FILE_SUFFIX = re.compile(r"\.[A-Za-z0-9]{1,6}(?![A-Za-z0-9])")
+CARD_HINT = re.compile(
+    r"(?i)(\bcard\w*\b|卡号|信用卡|银行卡|银联|\bpassword\b|\bpan\b|\bexpiry\b|\bexpire\b|"
+    r"\bvisa\b|\bmastercard\b|\bamex\b|\bunionpay\b|\bdiscover\b|\bjcb\b|\bmaestro\b|"
+    r"\bdebit\b|\bcredit\b|\bcvv\b|\bcvc\b)"
+)
+WORD_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+)
+PATH_CHARS = WORD_CHARS | frozenset("./\\:")
+HEX_CHARS = frozenset("0123456789abcdefABCDEF")
 PHILSYS_HINT = re.compile(r"(?i)\b(philsys|psn|umid|philippine identification)\b")
 NIK_HINT = re.compile(r"(?i)\b(nik|ktp|nomor induk|indonesia)\b")
 
@@ -118,6 +133,71 @@ def card_ok(raw: str) -> bool:
     if digits[0] not in "3456":
         return False
     return luhn_ok(digits)
+
+
+def _token_bounds(line: str, start: int, end: int, allowed) -> tuple[int, int]:
+    left = start
+    while left > 0 and line[left - 1] in allowed:
+        left -= 1
+    right = end
+    while right < len(line) and line[right] in allowed:
+        right += 1
+    return left, right
+
+
+def _span_contains(line: str, start: int, end: int, pattern: re.Pattern[str], group: int = 0) -> bool:
+    for match in pattern.finditer(line):
+        begin, finish = match.span(group)
+        if begin <= start and end <= finish:
+            return True
+    return False
+
+
+def card_context_ok(line: str, match: re.Match[str]) -> bool:
+    """这个数字所在的位置，支持「它是一张银行卡号」的判断吗？
+
+    Luhn 只能证明数字「像卡号」：URL 里的业务主键、文件路径、commit SHA、
+    19 位雪花 ID 都能通过校验。没有卡号语境的数字一律放过。
+    """
+    start, end = match.span(1)
+    digits = re.sub(r"\D", "", match.group(1))
+    if _span_contains(line, start, end, URL_SPAN):
+        return False
+    if _span_contains(line, start, end, MARKDOWN_TARGET, 1):
+        return False
+    path_left, path_right = _token_bounds(line, start, end, PATH_CHARS)
+    path_token = line[path_left:path_right]
+    if "/" in path_token or "\\" in path_token:
+        return False
+    if FILE_SUFFIX.match(line[end:]):
+        return False
+    word_left, word_right = _token_bounds(line, start, end, WORD_CHARS)
+    word_token = line[word_left:word_right]
+    if len(word_token) >= 7 and set(word_token) <= HEX_CHARS and set(word_token) - set("0123456789"):
+        return False
+    hint = bool(CARD_HINT.search(line))
+    before = line[start - 1] if start > 0 else ""
+    after = line[end] if end < len(line) else ""
+    if not hint and (before.isalpha() or after.isalpha()):
+        return False
+    if len(digits) == 19 and not hint:
+        return False
+    return True
+
+
+class _CardMatcher:
+    """银行卡号匹配器：命中数字后再按语境判断它是不是卡号。"""
+
+    def __init__(self, pattern: re.Pattern[str]) -> None:
+        self._pattern = pattern
+
+    def finditer(self, line: str):
+        for match in self._pattern.finditer(line):
+            if card_context_ok(line, match):
+                yield match
+
+
+CARD = _CardMatcher(CARD_PATTERN)
 
 
 def sg_nric_ok(prefix: str, digits: str, check: str) -> bool:
