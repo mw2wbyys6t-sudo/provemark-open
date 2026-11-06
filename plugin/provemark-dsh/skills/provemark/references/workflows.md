@@ -145,7 +145,7 @@ node "<PM>\bin\provemark.mjs" scan <repo> --only pii -f json -o "$env:TEMP\prove
 ```yaml
 - run: pip install -e .
 - run: provemark scan --fail-on high --min-confidence 0.5 --format sarif -o provemark.sarif
-- uses: github/codeql-action/upload-sarif@v3
+- uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
   with:
     sarif_file: provemark.sarif
 ```

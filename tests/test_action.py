@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -50,12 +51,21 @@ class ActionManifestTests(unittest.TestCase):
         steps = self.data["runs"]["steps"]
         upload = next(step for step in steps if step.get("name") == "Upload SARIF")
         self.assertIn("upload-sarif", upload["if"])
-        self.assertEqual(upload["uses"], "github/codeql-action/upload-sarif@v4")
+        self.assertTrue(upload["uses"].startswith("github/codeql-action/upload-sarif@"))
         self.assertTrue(upload.get("continue-on-error"))
 
     def test_setup_python_present(self) -> None:
         steps = self.data["runs"]["steps"]
         self.assertTrue(any(str(step.get("uses", "")).startswith("actions/setup-python@") for step in steps))
+
+    def test_action_dependencies_are_sha_pinned(self) -> None:
+        """Action 依赖必须固定到 SHA，否则用户引用它就带着供应链风险。"""
+        for step in self.data["runs"]["steps"]:
+            ref = str(step.get("uses", ""))
+            if not ref or ref.startswith("./") or ref.startswith("docker://"):
+                continue
+            version = ref.rsplit("@", 1)[-1]
+            self.assertRegex(version, r"^[0-9a-f]{40}$", f"未固定到 SHA：{ref}")
 
 
 class PolicyDefaultsTests(unittest.TestCase):
@@ -72,6 +82,34 @@ class PolicyDefaultsTests(unittest.TestCase):
     def test_generated_workflow_passes_both_flags(self) -> None:
         self.assertIn("--fail-on high", CI_TEMPLATE)
         self.assertIn("--min-confidence 0.5", CI_TEMPLATE)
+
+    def test_generated_workflow_actions_are_sha_pinned(self) -> None:
+        """生成的 CI 不能违反工具自己的 SCP-007 规则。"""
+        for line in CI_TEMPLATE.splitlines():
+            match = re.search(r"uses:\s*(\S+)", line)
+            if not match:
+                continue
+            ref = match.group(1)
+            self.assertIn("@", ref, ref)
+            version = ref.rsplit("@", 1)[1]
+            self.assertRegex(version, r"^[0-9a-f]{40}$", f"未固定到 SHA：{ref}")
+
+    def test_generated_workflow_install_source_is_installable(self) -> None:
+        """PyPI 上还没有官方包，安装源必须指向真实存在的 git 标签。"""
+        self.assertIn("PROVEMARK_SPEC", CI_TEMPLATE)
+        spec = re.search(r'PROVEMARK_SPEC:\s*"([^"]+)"', CI_TEMPLATE)
+        self.assertIsNotNone(spec)
+        value = spec.group(1)  # type: ignore[union-attr]
+        self.assertTrue(
+            value.startswith("git+https://") or value == "provemark",
+            f"安装源不可用：{value}",
+        )
+        if value.startswith("git+https://"):
+            self.assertIn("@v", value, "git 安装源必须固定到标签")
+
+    def test_generated_workflow_uses_current_codeql_action(self) -> None:
+        self.assertIn("github/codeql-action/upload-sarif@", CI_TEMPLATE)
+        self.assertNotIn("upload-sarif@v3", CI_TEMPLATE)
 
     def test_init_writes_readable_policy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

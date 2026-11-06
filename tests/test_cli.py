@@ -304,6 +304,18 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue((self.root / "LICENSE").exists())
 
+    def test_fix_rejects_unknown_only_scope(self) -> None:
+        """拼错的 --only 必须报错，不能静默什么都不做。"""
+        code, _, err = run(["fix", str(self.root), "--only", "readme"])
+        self.assertEqual(code, 2)
+        self.assertIn("未知修复项", err)
+        self.assertIn("license", err)
+
+    def test_fix_accepts_documented_only_scopes(self) -> None:
+        for scope in ("license", "gitignore", "security", "config", "ci"):
+            code, _, err = run(["fix", str(self.root), "--only", scope])
+            self.assertEqual(code, 0, f"{scope}: {err}")
+
     def test_ignore_appends_rule(self) -> None:
         code, _, _ = run(
             [

@@ -9,7 +9,7 @@ from pathlib import Path
 from . import __version__, ai_usage, fossa_deps, notices, vendored
 from .config import DEFAULT_CONFIG_TEMPLATE, ConfigError, find_config_file, load_config
 from .engine import gate_failed, run_scan
-from .fixers import apply_action, install_hook, plan, uninstall_hook
+from .fixers import FIX_TARGETS, apply_action, install_hook, plan, uninstall_hook
 from .report import FORMATS, ai_fix_prompt, dump, format_for_output, render
 from .report.console import use_color
 from .rules.catalog import catalog
@@ -333,6 +333,13 @@ def cmd_fix(args: argparse.Namespace) -> int:
         return 2
     _warn_legacy_config(config)
     only = _split(args.only)
+    for name in only or []:
+        if name not in FIX_TARGETS:
+            print(
+                f"未知修复项：{name}（可选：{', '.join(FIX_TARGETS)}）",
+                file=sys.stderr,
+            )
+            return 2
     actions = plan(
         root,
         config,
