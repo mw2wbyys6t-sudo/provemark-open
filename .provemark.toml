@@ -25,6 +25,8 @@ exclude = [
   "tests/test_engineering_rules.py",
   # 演示仓库故意做坏，用于展示扫描效果，不参与自身仓库的门禁
   "mock-repo/**",
+  # 端到端演示用的三栈仓库：SQL 拼接、假密钥、过期依赖都是刻意的样本
+  "demo/**",
   "provemark.sarif",
   "provemark-report.html",
 ]
@@ -94,4 +96,10 @@ expires = "2027-12-31"
 rule = "SEC-009"
 path = "tests/**"
 reason = "凭据检测用例里刻意写入的假私钥文本，用于验证检测逻辑，不是真实密钥"
+expires = "2027-12-31"
+
+[[ignore]]
+rule = "SEC-015"
+path = "tests/**"
+reason = "邮箱语境用例里的连接串样本（user:pass@host），用于验证口令不被当成邮箱；口令是占位值，不是真实凭据"
 expires = "2027-12-31"

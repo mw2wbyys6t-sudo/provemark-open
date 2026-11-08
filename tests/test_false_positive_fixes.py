@@ -221,6 +221,41 @@ class LicenseAliasTests(Base):
         self.assertEqual(effective, ["GPL-3.0-only"])
 
 
+class DatabaseUrlEmailTests(Base):
+    """缺陷 6：连接串里的口令不是邮箱。"""
+
+    def emails(self):
+        return [
+            item for item in pii.scan(context_for(self.root)) if item.rule_id == "PII-001"
+        ]
+
+    def test_password_in_connection_url_is_not_an_email(self) -> None:
+        write(
+            self.root,
+            "src/settings.py",
+            'DATABASE_URL = "postgresql://orderdesk:0rderd3sk@db.internal:5432/orderdesk"\n',
+        )
+        self.assertEqual(self.emails(), [], "user:pass@host 里的口令不是邮箱")
+
+    def test_passwordless_userinfo_is_not_an_email(self) -> None:
+        write(self.root, "src/git.py", 'REMOTE = "https://deploy@git.internal/repo.git"\n')
+        self.assertEqual(self.emails(), [], "URL 里的用户名不是邮箱")
+
+    def test_mailto_is_still_reported(self) -> None:
+        write(self.root, "src/mail.py", 'CONTACT = "mailto:support@acme.io"\n')
+        self.assertEqual(len(self.emails()), 1, "mailto 里的真实邮箱必须报出来")
+
+    def test_email_in_query_string_is_still_reported(self) -> None:
+        write(self.root, "src/api.py", 'URL = "https://acme.io/search?mail=support@acme.io"\n')
+        self.assertEqual(len(self.emails()), 1, "查询串里的真实邮箱必须报出来")
+
+    def test_plain_email_is_still_reported(self) -> None:
+        write(self.root, "src/mail.py", 'OWNER = "jane.doe@acme.io"\n')
+        found = self.emails()
+        self.assertEqual(len(found), 1, "普通邮箱照常报")
+        self.assertNotIn("jane.doe", found[0].evidence, "证据里不能出现原文")
+
+
 class CardContextTests(Base):
     """缺陷 5：Luhn 通过不等于银行卡。"""
 

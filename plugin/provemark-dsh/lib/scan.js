@@ -237,13 +237,25 @@ export function describeTrend(trend) {
   const scope = trend.crossSession ? '跨会话基线' : '本会话基线';
   const baselineText =
     typeof trend.baselineScore === 'number' ? `${scope} ${trend.baselineScore} 分` : scope;
+  const delta = typeof trend.scoreDelta === 'number' ? trend.scoreDelta : 0;
   if (trend.newCount > 0) {
     const list = trend.newFindings
       .slice(0, 4)
       .map((item) => `${item.rule || '?'}${item.path ? `(${item.path})` : ''}`)
       .join('、');
+    const suffix = trend.newCount > 4 ? '…' : '';
     const severe = ['critical', 'high'].includes(trend.worstNewSeverity);
-    return `${severe ? '⛔' : '⚠️'} 较${baselineText}变差：新增 ${trend.newCount} 条问题（${list}${trend.newCount > 4 ? '…' : ''}）。${severe ? '先回退或修掉这些再继续。' : '不要继续扩大改动，先处理新增项。'}`;
+    const fixedPart = trend.fixedCount > 0 ? `修掉 ${trend.fixedCount} 条、` : '';
+    const tail = `（${list}${suffix}）`;
+    // 分数在涨的时候，新增指纹往往只是「升级依赖换了版本号」，不是退步。
+    // 这时候叫模型「先回退」会把它逼回去撤销一次正确的修复。
+    if (delta > 0) {
+      return `⚠️ 较${baselineText} +${delta} 分：${fixedPart}新增 ${trend.newCount} 条问题${tail}。整体在变好，但新增项要单独确认。`;
+    }
+    if (delta === 0) {
+      return `⚠️ 较${baselineText}持平：${fixedPart}新增 ${trend.newCount} 条问题${tail}。净变化为零，看清单再判断。`;
+    }
+    return `${severe ? '⛔' : '⚠️'} 较${baselineText}变差（${delta} 分）：${fixedPart}新增 ${trend.newCount} 条问题${tail}。${severe ? '先回退或修掉这些再继续。' : '不要继续扩大改动，先处理新增项。'}`;
   }
   if (trend.fixedCount > 0) {
     const sign = trend.scoreDelta > 0 ? `+${trend.scoreDelta}` : String(trend.scoreDelta);

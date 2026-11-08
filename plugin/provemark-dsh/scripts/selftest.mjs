@@ -455,6 +455,40 @@ if (progressTool && guard && scannable) {
   check(/<!doctype html>/i.test(document), 'dashboard output is a complete HTML document');
   check(/跨项目总览/.test(document), 'dashboard includes the cross-project overview');
   check(!/https?:\/\//.test(document), 'dashboard references no remote asset');
+  // 计数来自 CLI 的真实输出：写死的 0 会让模型以为仪表盘是空的。
+  check(Number(board.scans) >= 1, `dashboard reports the scan count it rendered (got ${board.scans})`);
+  check(Number(board.projects) >= 1, `dashboard reports the project count it covers (got ${board.projects})`);
+  const boardText = progressTool.output.render({}, board)[0]?.text ?? '';
+  check(!/包含 0 个项目/.test(boardText), 'dashboard text never claims an empty ledger');
+}
+
+// 分数在涨、同时又冒出新指纹（升级依赖就会这样）时，不能说「变差」让模型回退。
+{
+  const { describeTrend } = await import(pathToFileURL(join(PACKAGE_ROOT, 'lib', 'scan.js')).href);
+  const improved = describeTrend({
+    baselineScore: 0,
+    scoreDelta: 31,
+    newCount: 2,
+    fixedCount: 9,
+    worstNewSeverity: 'high',
+    newFindings: [{ rule: 'DEP-001', path: 'package-lock.json' }],
+  });
+  check(/\+31 分/.test(improved), 'a higher score is reported as a gain, not a regression');
+  check(!/先回退/.test(improved), 'an improved score never tells the model to roll back');
+  check(/修掉 9 条/.test(improved), 'the same line still reports what was fixed');
+
+  const worse = describeTrend({
+    baselineScore: 88,
+    scoreDelta: -6,
+    newCount: 1,
+    fixedCount: 0,
+    worstNewSeverity: 'critical',
+    newFindings: [{ rule: 'SEC-003', path: 'settings.py' }],
+  });
+  check(/变差/.test(worse) && /先回退/.test(worse), 'a lower score still says the project got worse');
+
+  const flat = describeTrend({ baselineScore: 50, scoreDelta: 0, newCount: 1, fixedCount: 1, newFindings: [] });
+  check(/持平/.test(flat) && !/变差/.test(flat), 'a flat score is not called a regression');
 }
 
 

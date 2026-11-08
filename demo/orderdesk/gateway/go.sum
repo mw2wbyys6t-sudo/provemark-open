@@ -1,0 +1,5 @@
+github.com/gin-gonic/gin v1.9.0 h1:4idEAncQnU5cBpPK7UapCfSPaPUpua7XA0zS0SDqW0g=
+github.com/gin-gonic/gin v1.9.0/go.mod h1:W1Me9+pJ1bN7yRkIJRk5D8gQi4VJ0dKk7q3oM0d1oQ0w=
+github.com/golang-jwt/jwt/v4 v4.5.0 h1:7cYmFTcT2XQ3gW0m5g5M7oQ0B2H0T4n5xX9rQ0w1Y2zA=
+github.com/prometheus/client_golang v1.14.0 h1:4idEAncQnU5cBpPK7UapCfSPaPUpua7XA0zS0SDqW0g=
+golang.org/x/text v0.3.5 h1:2rY0G7m8b1nQ3sQ0y3P0f4K5n1o7Q0w3T7h6b5V4c3X0=

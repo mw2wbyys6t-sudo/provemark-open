@@ -6,6 +6,8 @@
 *.key
 # 演示仓库故意保留一个假 .env，用于验证 HYG-005
 !mock-repo/.env
+# 端到端演示同样需要一个「已入库的 .env」，其中全是假凭据
+!demo/orderdesk/.env
 
 # Python
 __pycache__/

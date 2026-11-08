@@ -153,6 +153,24 @@ def _span_contains(line: str, start: int, end: int, pattern: re.Pattern[str], gr
     return False
 
 
+def email_in_url_credentials(line: str, start: int, end: int) -> bool:
+    """URL authority 里的 `user[:pass]@host` 不是邮箱。
+
+    连接串把用户名与口令塞在 authority 里（`postgresql://orderdesk:0rderd3sk@db.internal`、
+    `https://deploy@git.internal/repo.git`），邮箱正则会把这一段当成 local part。
+    只认 authority：路径或查询串里的真邮箱（`/search?mail=a@b.com`）照常报。
+    """
+    for match in URL_SPAN.finditer(line):
+        begin, finish = match.span()
+        if not (begin <= start and end <= finish):
+            continue
+        rest = match.group(0).split("://", 1)[-1]
+        authority = rest.split("/", 1)[0]
+        authority_begin = finish - len(rest)
+        return authority_begin <= start and end <= authority_begin + len(authority)
+    return False
+
+
 def card_context_ok(line: str, match: re.Match[str]) -> bool:
     """这个数字所在的位置，支持「它是一张银行卡号」的判断吗？
 

@@ -5,6 +5,25 @@
 
 ## [未发布]
 
+### 新增（端到端演示仓库 + 双语 README）
+- `demo/orderdesk/`：48 个文件的三栈演示仓库（Python API / React 面板 / Go 网关），
+  刻意写入 SQL 拼接、硬编码密钥、`.env` 入库、过期依赖等，用于在 README 里展示插件的真实效果。
+  已加入 `.provemark.toml` 的 `exclude`，不参与本仓库门禁。
+- `README.en.md`：完整英文版；两个 README 顶部互加语言切换。
+
+### 修复（跑演示时暴露的三个插件缺陷）
+- **`PII-001` 把连接串口令当邮箱**：`postgresql://<user>:<password>@db.internal` 里的口令段
+  命中邮箱正则。新增 `rules.email_in_url_credentials()`，只放行 URL **authority** 内的
+  `user[:pass]@host`；路径与查询串里的真邮箱照常报（`/search?mail=a@b.com`）。
+  新增 5 项回归测试。
+- **分数在涨却报「变差、先回退」**：`describeTrend()` 只看 `newCount`，升级依赖换了版本号会产生
+  新指纹，于是把 +73 分的一次改动画成退步，还会命令模型回退。现在按 `scoreDelta` 分档：
+  涨 → 「+N 分，新增项单独确认」；持平 → 「持平」；只有真的下降才说「变差」并提示回退。
+- **仪表盘写死「0 个项目 / 0 次扫描」**：`runProgress()` 的 dashboard 分支直接返回
+  `projects: 0, scans: 0`，历史库为空时还会谎报「已生成」。现在从 CLI 真实输出解析计数，
+  解析不到（历史库为空）就返回错误而不是伪造路径。
+- `selftest.mjs` 为此新增 7 条断言（计数、空账本、趋势措辞三种档位）。测试 394 → 399。
+
 
 ## [0.7.1] - 2026-11-08
 

@@ -1132,7 +1132,26 @@ export function apply(ctx, rawConfig) {
           message: '',
         };
       }
-      return { action, root, reportPath: scoped.path, projects: 0, scans: 0, message: '' };
+      const text = String(outcome.stdout ?? '');
+      const totals = text.match(/(\d+)\s*个项目\s*·\s*(\d+)\s*次扫描/);
+      if (!totals) {
+        // 历史库为空时 CLI 正常退出但不落盘：不能谎报「已生成」。
+        return {
+          action,
+          root,
+          reportPath: '',
+          error: oneLine(text.trim() || '仪表盘没有生成：历史库为空', 400),
+          message: '',
+        };
+      }
+      return {
+        action,
+        root,
+        reportPath: scoped.path,
+        projects: Number(totals[1]),
+        scans: Number(totals[2]),
+        message: '',
+      };
     }
 
     const cliArgs = all ? ['progress', '--all', '--json'] : ['progress', root, '--json'];

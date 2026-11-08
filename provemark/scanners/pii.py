@@ -81,6 +81,8 @@ def _line_findings(
         local, domain = match.group(1), match.group(2)
         if rules.is_placeholder_email(local, domain):
             continue
+        if rules.email_in_url_credentials(line, match.start(), match.end()):
+            continue
         severity = _severity("low", is_doc, is_test)
         masked = rules.mask_email(local, domain)
         findings.append(
@@ -359,8 +361,11 @@ def scan(ctx: Context) -> list:
                 has_emails = True
                 for match in rules.EMAIL.finditer(line):
                     local, domain = match.group(1), match.group(2)
-                    if not rules.is_placeholder_email(local, domain):
-                        seen_emails.add(f"{local}@{domain}".lower())
+                    if rules.is_placeholder_email(local, domain):
+                        continue
+                    if rules.email_in_url_credentials(line, match.start(), match.end()):
+                        continue
+                    seen_emails.add(f"{local}@{domain}".lower())
             for finding in _line_findings(line, info, lineno, is_doc, is_test, active):
                 # Test fixtures legitimately contain fake emails/cards; flagging
                 # them on every fixture line drowns the real signals.
