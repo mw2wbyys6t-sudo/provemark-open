@@ -63,7 +63,10 @@ push(
 );
 
 // 2) did a running host load it?
-const marker = join(tmpdir(), 'provemark-dsh-loaded.json');
+// 0.6.4+ writes into a private per-host directory; older builds wrote the file
+// directly into the temp root, so both layouts are probed.
+const markerCandidates = [join(tmpdir(), 'provemark-dsh', 'loaded.json'), join(tmpdir(), 'provemark-dsh-loaded.json')];
+const marker = markerCandidates.find((file) => existsSync(file)) ?? markerCandidates[0];
 let loaded = null;
 if (existsSync(marker)) {
   try {

@@ -440,6 +440,21 @@ def apply_action(root: Path, action: Action, *, force: bool = False) -> str:
     if action.skipped:
         return f"跳过 {action.path}"
     target = root / action.path
+    # A repository can ship `.gitignore -> ~/.bashrc`, or a dangling symlink where
+    # the fixer wants to create a file. Writing through either would edit a file
+    # outside the project — the one thing a "safe fixer" must never do.
+    root_path = Path(root)
+    try:
+        relative_parent = target.parent.relative_to(root_path)
+    except ValueError:
+        return f"跳过 {action.path}（目标越界）"
+    probe = root_path
+    for part in relative_parent.parts:
+        probe = probe / part
+        if probe.is_symlink():
+            return f"跳过 {action.path}（路径包含符号链接 {part}）"
+    if target.is_symlink():
+        return f"跳过 {action.path}（目标本身是符号链接）"
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         if action.kind == "create":

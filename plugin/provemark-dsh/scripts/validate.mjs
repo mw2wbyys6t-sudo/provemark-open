@@ -10,7 +10,7 @@
  * frontmatter, references the skill mentions but does not ship, and a vendored
  * scanner that is incomplete or out of step with its recorded version.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -50,7 +50,89 @@ if (pkg !== null) {
   for (const required of ['lib', 'bin', 'cordis.patch.yml', 'skills', 'python', 'scripts']) {
     check((pkg.files ?? []).includes(required), `package.json files[] should ship "${required}"`);
   }
+  // Ecosystem manifest: the DSH plugin manager gates on `dsh.engines.dsh` before
+  // installing/activating, so that declaration is what keeps an incompatible host
+  // from landing a half-working install.
+  check(
+    /^[\^~>=<]*\s*\d+\.\d+\.\d+/.test(String(pkg.dsh?.engines?.dsh ?? '')),
+    'package.json dsh.engines.dsh is missing (the plugin manager cannot gate host compatibility without it)',
+  );
+  const releases = pkg.dsh?.compatibility?.dshReleases ?? {};
+  check(Object.keys(releases).length > 0, 'package.json dsh.compatibility.dshReleases is missing (state which host versions were verified)');
+  for (const [version, status] of Object.entries(releases)) {
+    check(['compatible', 'incompatible', 'unknown'].includes(status), `dsh.compatibility.dshReleases["${version}"] must be compatible|incompatible|unknown`);
+  }
+  // The package installs nothing: the scanner is vendored under python/ and the
+  // host supplies @deepseek-ai/dsh-tools at runtime through a dynamic import.
+  // A dependency creeping into these sections would silently break the
+  // "no pip install / no npm install" promise users rely on.
+  for (const section of ['dependencies', 'optionalDependencies']) {
+    check(
+      Object.keys(pkg[section] ?? {}).length === 0,
+      `package.json ${section} must stay empty — the scanner is vendored and the host tools API is resolved at runtime`,
+    );
+  }
+  check(pkg.license === 'Apache-2.0', 'package.json license should stay Apache-2.0 (matches LICENSE)');
+  notes.push('manifest: dsh.engines.dsh + dshReleases + zero installed deps');
 }
+
+// ------------------------------------------------------- display metadata
+// Plugin Manager and Settings read the icon and the locale files WITHOUT
+// activating the plugin, so a broken image or a missing meta.title shows up as
+// blank artwork and untranslated rows in the UI — never as a runtime error.
+const iconRel = typeof pkg?.icon === 'string' ? pkg.icon : typeof pkg?.exports?.['./icon'] === 'string' ? pkg.exports['./icon'] : null;
+if (iconRel === null) {
+  problems.push('package.json needs an icon: declare top-level "icon" (or export "./icon")');
+} else {
+  const clean = iconRel.replace(/^\.\//, '');
+  const iconFile = join(ROOT, clean);
+  check(!/^([A-Za-z]:|[\\/])/.test(clean), `icon path must be relative and inside the package: ${iconRel}`);
+  check(/\.(svg|png|jpe?g|webp)$/i.test(clean), `icon must be svg/png/jpeg/webp, got ${iconRel}`);
+  if (!existsSync(iconFile)) {
+    problems.push(`icon not found: ${iconRel}`);
+  } else {
+    const bytes = statSync(iconFile).size;
+    check(bytes > 0 && bytes <= 256 * 1024, `icon must be 1 byte..256 KiB, got ${bytes}`);
+    if (clean.endsWith('.svg')) {
+      const svg = readFileSync(iconFile, 'utf8');
+      check(/^<svg[\s>]/.test(svg.trim()), 'icon.svg must start with a root <svg> element');
+      check(/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svg), 'icon.svg needs the SVG xmlns namespace');
+      check(/viewBox="0 0 \d+ \d+"/.test(svg), 'icon.svg needs a square viewBox so it scales in every slot');
+      check(!/<script|foreignObject|javascript:/i.test(svg), 'icon.svg must not carry scripts, foreignObject or javascript: URLs');
+      check(!/(?:href|src)\s*=\s*["'](?:https?:)?\/\//i.test(svg), 'icon.svg must not reference remote resources');
+    }
+    check(
+      (pkg.files ?? []).some((entry) => entry === clean || entry === iconRel),
+      `package.json files[] must ship the icon (${clean})`,
+    );
+    notes.push(`icon: ${clean} (${bytes} bytes)`);
+  }
+}
+check(
+  typeof pkg?.exports?.['./locale/*.json'] === 'string',
+  'package.json must export "./locale/*.json" so the Plugin Manager can read titles without activating',
+);
+for (const language of ['en', 'zh']) {
+  const file = join(ROOT, 'locale', `${language}.json`);
+  if (!existsSync(file)) {
+    problems.push(`locale/${language}.json is missing`);
+    continue;
+  }
+  let meta = null;
+  try {
+    meta = JSON.parse(readFileSync(file, 'utf8'))?.meta ?? null;
+  } catch (error) {
+    problems.push(`locale/${language}.json: ${error.message}`);
+    continue;
+  }
+  check(typeof meta?.title === 'string' && meta.title.trim().length > 0, `locale/${language}.json needs meta.title`);
+  check(
+    typeof meta?.description === 'string' && meta.description.trim().length >= 40,
+    `locale/${language}.json needs a meta.description that actually describes the plugin`,
+  );
+}
+check((pkg.files ?? []).includes('locale/*.json'), 'package.json files[] must ship locale/*.json');
+notes.push('locale: en + zh meta.title/description');
 
 // -------------------------------------------------------------- cordis patch
 const patchFile = join(ROOT, pkg?.dsh?.bundle?.patch ?? 'cordis.patch.yml');
@@ -112,6 +194,12 @@ if (!existsSync(skillFile)) {
     check(description.replace(/^["']|["']$/g, '').length >= 120, 'SKILL.md description is too short to route on');
     check(/扫描/.test(description), 'SKILL.md description should carry the Chinese trigger wording');
     check(/audit|vulnerabilit|license/i.test(description), 'SKILL.md description should carry English trigger keywords too');
+    if (pkg) {
+      check(
+        block.includes(`version: "${pkg.version}"`),
+        `SKILL.md metadata.version must match package.json (${pkg.version}) — run scripts/release.mjs so the four version anchors stay in step`,
+      );
+    }
   }
   for (const match of text.matchAll(/references\/([\w.-]+\.md)/g)) {
     check(existsSync(join(ROOT, 'skills', 'provemark', 'references', match[1])), `SKILL.md references ${match[1]} but it does not exist`);

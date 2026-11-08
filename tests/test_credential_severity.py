@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -22,11 +24,13 @@ def write(root: Path, rel: str, text: str) -> None:
 
 def scan(root: Path) -> str:
     result = subprocess.run(
-        ["python3", "-m", "provemark", "scan", str(root), "--offline", "--only", "repo", "--verbose"],
+        [sys.executable, "-m", "provemark", "scan", str(root), "--offline", "--only", "repo", "--verbose"],
         cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
+        env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
         timeout=180,
     )
     return result.stdout

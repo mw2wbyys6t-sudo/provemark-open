@@ -158,12 +158,19 @@ def _scan_lockfiles(ctx: Context) -> list[Finding]:
                 and not package.version
                 and not package.pinned_by_parent
             ]
-            if not loose:
-                continue
             # A library is consumed through the resolver of whoever installs it,
             # so not committing a lockfile is the norm (flask, requests, serde all
             # do this). Applications should pin; libraries only get an advisory.
             is_library = str(getattr(ctx.config, "project_kind", "library")) == "library"
+            if is_library:
+                # Only the default install has to be reproducible for a library:
+                # `pip install provemark` resolves zero dependencies. A floating
+                # version inside an optional extra or a dev group is opt-in and is
+                # decided by the consumer's/CI's resolver — that is not a reason to
+                # demand a lockfile the package would never ship.
+                loose = [package for package in loose if package.scope == "runtime"]
+            if not loose:
+                continue
             findings.append(
                 make_finding(
                     "SCP-001",

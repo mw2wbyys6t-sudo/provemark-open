@@ -23,7 +23,7 @@ from provemark.cache import Cache
 from provemark.config import load_config
 from provemark.engine import run_scan
 from provemark.net import NetworkError
-from provemark.scanners import ai_code, deps, files as files_scanner, repo, supply
+from provemark.scanners import ai_code, deps, files as files_scanner, repo, supply, vuln
 from provemark.scanners.base import Context
 
 
@@ -162,6 +162,80 @@ class SupplySeverityTests(Base):
         write(self.root, "pyproject.toml", '[project]\nname = "demo"\nversion = "1.0"\ndependencies = ["requests>=2"]\n')
         found = rules_of(supply.scan(context_for(self.root)), "SCP-001")
         self.assertEqual(found["SCP-001"].severity, "medium")  # type: ignore[union-attr]
+
+    def test_optional_extra_does_not_require_a_lockfile_for_a_library(self) -> None:
+        """库的默认安装没有依赖时，extra 里的浮动版本不是「安装不可复现」。"""
+        write(self.root, "README.md", "# demo")
+        write(self.root, "LICENSE", "MIT License\n")
+        write(
+            self.root,
+            "pyproject.toml",
+            '[project]\nname = "demo"\nversion = "1.0"\ndependencies = []\n\n'
+            '[project.optional-dependencies]\nyaml = ["PyYAML>=6"]\n',
+        )
+        found = rules_of(supply.scan(context_for(self.root)), "SCP-001")
+        self.assertEqual(found, {}, "可选 extra 的浮动版本不应要求库提交锁文件")
+
+    def test_optional_extra_still_requires_a_lockfile_for_an_app(self) -> None:
+        write(self.root, "README.md", "# demo")
+        write(self.root, "LICENSE", "MIT License\n")
+        write(self.root, ".provemark.toml", '[project]\nkind = "app"\n')
+        write(
+            self.root,
+            "pyproject.toml",
+            '[project]\nname = "demo"\nversion = "1.0"\n\n'
+            '[project.optional-dependencies]\nyaml = ["PyYAML>=6"]\n',
+        )
+        found = rules_of(supply.scan(context_for(self.root)), "SCP-001")
+        self.assertIn("SCP-001", found, "应用的可选依赖浮动同样会让安装不可复现")
+
+
+class DependencyCoverageTests(Base):
+    """DEP-003 只应覆盖「版本未知」，不应把按 SHA 固定的 Action 算进去。"""
+
+    def test_sha_pinned_action_is_not_reported_as_unknown_version(self) -> None:
+        write(self.root, "README.md", "# demo")
+        write(self.root, "LICENSE", "MIT License\n")
+        write(
+            self.root,
+            ".github/workflows/ci.yml",
+            "jobs:\n  test:\n    steps:\n"
+            "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n",
+        )
+        context = context_for(self.root)
+        found = rules_of(vuln.scan(context), "DEP-003")
+        self.assertEqual(found, {}, "按 commit SHA 固定的 Action 不是「版本未知」")
+        self.assertTrue(
+            any("commit SHA" in note for note in context.notes),
+            "需要在 note 里说明这几个 Action 无法按 SHA 查询 OSV",
+        )
+        self.assertEqual(context.unverified_packages, 1, "未查询的依赖仍要如实计数")
+
+    def test_floating_range_still_reports_dep_003(self) -> None:
+        write(self.root, "README.md", "# demo")
+        write(self.root, "LICENSE", "MIT License\n")
+        write(self.root, "pyproject.toml", '[project]\nname = "demo"\nversion = "1.0"\ndependencies = ["requests>=2"]\n')
+        context = context_for(self.root)
+        found = rules_of(vuln.scan(context), "DEP-003")
+        self.assertIn("DEP-003", found, "浮动版本的普通依赖仍要提示漏洞覆盖不到")
+
+    def test_optional_extra_is_a_note_not_a_finding(self) -> None:
+        """可选 extra 的浮动版本由使用方解析：写成 note，不要求提交锁文件。"""
+        write(self.root, "README.md", "# demo")
+        write(self.root, "LICENSE", "MIT License\n")
+        write(
+            self.root,
+            "pyproject.toml",
+            '[project]\nname = "demo"\nversion = "1.0"\n\n'
+            '[project.optional-dependencies]\nyaml = ["PyYAML>=6"]\n',
+        )
+        context = context_for(self.root)
+        found = rules_of(vuln.scan(context), "DEP-003")
+        self.assertEqual(found, {}, "可选 extra 不该触发「生成锁文件」这条")
+        self.assertTrue(
+            any("可选依赖" in note for note in context.notes),
+            "未查询的可选依赖仍然要在 note 里说清楚",
+        )
 
 
 class LicenceFileTests(Base):

@@ -91,6 +91,10 @@ def parse_requirements_txt(path: Path, root: Path, result: DepsResult, depth: in
         if full.startswith(("-r ", "--requirement", "-c ", "--constraint")):
             target = full.split(maxsplit=1)[1].strip() if " " in full else ""
             child = (path.parent / target).resolve()
+            # `-r ../../.ssh/id_rsa` must not turn a scan into an arbitrary file
+            # reader outside the repository being scanned.
+            if root.resolve() not in child.parents:
+                continue
             if child.is_file():
                 parse_requirements_txt(child, root, result, depth + 1)
             continue

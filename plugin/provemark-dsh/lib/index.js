@@ -13,9 +13,9 @@
  * Python, or a host API that moved must degrade to "no guardrail", never to a
  * failed boot.
  */
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   resolveRoot,
@@ -28,14 +28,16 @@ import {
   createBaseline,
   compareToBaseline,
   describeTrend,
+  oneLine,
 } from './scan.js';
 import { normalizeConfig } from './config.js';
 import { pythonStatus, scannerPresent } from './python.js';
 import { loadBaseline, saveBaseline } from './baseline-store.js';
-import { GUARDRAILS, SECTION_NAME, CONTEXT_NAME, stateText, toolText } from './format.js';
+import { GUARDRAILS, SECTION_NAME, CONTEXT_NAME, stateText, toolText, progressText, wrapUntrusted } from './format.js';
+import { runProvemark, parseScanJson } from './python.js';
 
 export const name = 'provemark-guard';
-export const VERSION = '0.6.2';
+export const VERSION = '0.7.1';
 
 const MAX_SESSIONS = 64;
 
@@ -49,10 +51,15 @@ export function apply(ctx, rawConfig) {
     scans: 0,
     lastScan: null,
   };
-  const markerFile = process.env.PROVEMARK_DSH_MARKER || join(tmpdir(), 'provemark-dsh-loaded.json');
+  // Diagnostics live in a per-host directory with owner-only permissions: a
+  // world-writable temp file that the plugin rewrites on every load is a
+  // symlink/truncation target on multi-user machines.
+  const markerDir = join(tmpdir(), 'provemark-dsh');
+  const markerFile = process.env.PROVEMARK_DSH_MARKER || join(markerDir, 'loaded.json');
 
   function flushMarker() {
     try {
+      mkdirSync(markerDir, { recursive: true, mode: 0o700 });
       writeFileSync(
         markerFile,
         `${JSON.stringify(
@@ -72,7 +79,7 @@ export function apply(ctx, rawConfig) {
           null,
           2,
         )}\n`,
-        'utf8',
+        { encoding: 'utf8', mode: 0o600 },
       );
     } catch {
       /* diagnostics must never block activation */
@@ -353,13 +360,22 @@ export function apply(ctx, rawConfig) {
     }
     state.notifiedAt = now;
     const lines = [
-      `Provemark 守卫：${root} 的后台扫描发现 ${fresh.length} 条新的高优先级问题（分数 ${summary.score ?? '—'}/100 ${summary.grade}）。`,
-      ...fresh.slice(0, 3).map((finding) => `- [${finding.severity}] ${finding.rule} ${finding.title}${finding.path ? ` ${finding.path}:${finding.line}` : ''}`),
+      `Provemark 守卫：${oneLine(root, 300)} 的后台扫描发现 ${fresh.length} 条新的高优先级问题（分数 ${summary.score ?? '—'}/100 ${oneLine(summary.grade, 10)}）。`,
+      ...fresh
+        .slice(0, 3)
+        .map(
+          (finding) =>
+            `- [${oneLine(finding.severity, 20)}] ${oneLine(finding.rule, 40)} ${oneLine(finding.title, 180)}${finding.path ? ` ${oneLine(finding.path, 200)}:${finding.line}` : ''}`,
+        ),
       '处理建议：先修这些再继续；如果只是测试夹具或误报，说明原因，不要用 ignore 掩盖。',
     ];
+    // The notice lands in the agent's inbox as an unsolicited message: the parts
+    // that come from the scanned tree must carry the same "this is data" fence.
+    const [headline, ...findings] = lines;
+    const text = [headline, wrapUntrusted(findings)].join('\n');
     setTimer(() => {
       try {
-        target.inject({ content: [{ type: 'text', text: lines.join('\n') }], source: { kind: 'provemark' } });
+        target.inject({ content: [{ type: 'text', text }], source: { kind: 'provemark' } });
       } catch (error) {
         log(ctx, settings, `could not queue the risk notice: ${String(error?.message ?? error)}`, 'warn');
       }
@@ -493,7 +509,8 @@ export function apply(ctx, rawConfig) {
 
   // --------------------------------------------------------------------- tools
   ctx.inject(['tools'], (sctx) => {
-    void toolsReady.then(() => {
+    void toolsReady
+      .then(() => {
       if (defineTool === null) return;
       const tools = sctx.tools;
       if (!tools?.register) return;
@@ -602,12 +619,12 @@ export function apply(ctx, rawConfig) {
           parameters: {
             path: { type: 'string', description: 'Repository root. Defaults to the session working directory.' },
             format: { type: 'string', description: 'json | html | markdown | sarif. Default markdown.' },
-            output: { type: 'string', description: 'Report path (absolute, or relative to the scanned root). Parent directories are created.' },
+            output: { type: 'string', description: 'Report path: relative to the scanned root, or absolute but inside the workspace / OS temp area (anything else is refused). Parent directories are created.' },
             only: { type: 'string', description: 'Comma-separated scanners to run.' },
             skip: { type: 'string', description: 'Comma-separated scanners to skip.' },
             offline: { type: 'boolean', description: 'Skip network lookups.' },
             failOn: { type: 'string', description: 'none | low | medium | high | critical — exit code 1 when reached.' },
-            aiPrompt: { type: 'string', description: 'Write an agent-readable repair brief to this path.' },
+            aiPrompt: { type: 'string', description: 'Write an agent-readable repair brief to this path (same workspace/temp confinement as output).' },
             sbom: { type: 'string', description: 'Cross-check a CycloneDX/SPDX JSON SBOM file.' },
             verbose: { type: 'boolean', description: 'Include every finding in the console output.' },
           },
@@ -633,10 +650,127 @@ export function apply(ctx, rawConfig) {
         }),
         'provemark: scan tool',
       );
-    });
+
+      register(
+        defineTool({
+          name: 'provemark_progress',
+          description:
+            'Read the local scan-history ledger: one project\'s progress (score timeline, which findings were fixed, which are still open, which came back) or a cross-project roll-up of every repository scanned on this machine. action="dashboard" writes a self-contained HTML dashboard (charts, no network) inside the workspace or the OS temp area. Use it before claiming progress, at the end of a maintenance session, or when the user asks "how is this project doing over time".',
+          parameters: {
+            action: { type: 'string', description: 'summary (default) reads the numbers; dashboard writes the single-file HTML view.' },
+            path: { type: 'string', description: 'Project root. Defaults to the session working directory. Ignored with all=true.' },
+            all: { type: 'boolean', description: 'Report every project in the local history ledger instead of one project.' },
+            days: { type: 'number', description: 'Only look at the last N days (0 = all history).' },
+            output: { type: 'string', description: 'dashboard only: HTML path, relative to the workspace or absolute inside the workspace / temp area.' },
+          },
+          output: {
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                action: { type: 'string' },
+                root: { type: 'string' },
+                reportPath: { type: 'string' },
+                projects: { type: 'number' },
+                scans: { type: 'number' },
+                score: { type: 'number' },
+                grade: { type: 'string' },
+                open: { type: 'number' },
+                fixed: { type: 'number' },
+                reopened: { type: 'number' },
+                data: { type: 'object', additionalProperties: true },
+                error: { type: 'string' },
+                message: { type: 'string' },
+              },
+            },
+            render: (_args, value) => [{ type: 'text', text: progressText(value) }],
+          },
+          async execute(args, exec) {
+            return runProgress(args ?? {}, exec);
+          },
+        }),
+        'provemark: progress tool',
+      );
+    })
+      // A rejection here would otherwise be unhandled — fatal for the host
+      // process on modern Node. Registration failure must degrade, not crash.
+      .catch((error) => {
+        diag.stages.toolsRegistration = `failed: ${String(error?.message ?? error)}`;
+        log(ctx, settings, `tool registration failed: ${String(error?.message ?? error)}`, 'warn');
+      });
   });
 
   // ------------------------------------------------------------------- helpers
+  /**
+   * Resolve every symlink on the way to `target`, including the not-yet-existing
+   * tail, so a link inside the workspace cannot silently redirect a write out of
+   * it. Falls back to the lexical path when nothing on the way exists.
+   */
+  function realpathish(target) {
+    let head = resolve(target);
+    const rest = [];
+    for (let depth = 0; depth < 64; depth += 1) {
+      try {
+        const real = realpathSync(head);
+        return rest.length > 0 ? join(real, ...rest.slice().reverse()) : real;
+      } catch {
+        const parent = dirname(head);
+        if (parent === head) return resolve(target);
+        rest.push(basename(head));
+        head = parent;
+      }
+    }
+    return resolve(target);
+  }
+
+  /**
+   * Where a tool call may write. The scan root is NOT the anchor: a model can
+   * name any directory as `path`, so anchoring to it would let a repo (or an
+   * injected instruction) write into the DSH profile by "scanning" it. The
+   * anchor is the session workspace; the OS temp area is the one deliberate
+   * exception so a report can be produced without polluting the repository.
+   */
+  function outputBases(root, anchor) {
+    const bases = [];
+    if (anchor) bases.push(anchor);
+    bases.push(tmpdir());
+    // Host-less contexts (the offline self-test) have no session workspace; the
+    // scanned root is the only reasonable anchor left, and no model steers it.
+    if (bases.length === 1) bases.push(root);
+    return bases;
+  }
+
+  function isInside(base, target) {
+    const realBase = realpathish(base);
+    const realTarget = realpathish(target);
+    if (realTarget === realBase) return true;
+    const rel = relative(realBase, realTarget);
+    return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+  }
+
+  /**
+   * Resolve a requested write path, or explain why it is refused.
+   *
+   * A relative path means "inside the scanned workspace". An absolute path may
+   * also target the OS temp area (that is where reports belong when they are
+   * not part of the repository). Everything else — the DSH profile, an SSH
+   * directory, a startup folder — is refused: `path` is model-supplied, so
+   * anchoring writes to it would make "scan C:\Users\me\.dsh" a write primitive.
+   */
+  function scopedOutputPath(requested, { root, anchor }) {
+    const relativeRequest = !isAbsolute(requested);
+    const target = relativeRequest ? resolve(root, requested) : resolve(requested);
+    if (relativeRequest) {
+      return isInside(root, target)
+        ? { path: target, error: null }
+        : { path: null, error: `相对输出路径必须留在工作区内：${target}` };
+    }
+    for (const base of outputBases(root, anchor)) {
+      if (isInside(base, target)) return { path: target, error: null };
+    }
+    return { path: null, error: `输出路径必须位于工作区或系统临时目录内：${target}` };
+  }
+
   function guardedRoot(args, exec) {
     const candidate = typeof args.path === 'string' && args.path.trim() !== '' ? args.path : null;
     if (candidate !== null) return resolveRoot(candidate);
@@ -836,14 +970,20 @@ export function apply(ctx, rawConfig) {
     if (args.verbose) cliArgs.push('--verbose');
 
     const { mkdirSync } = await import('node:fs');
-    const { dirname, isAbsolute, resolve: resolvePath } = await import('node:path');
+    const { dirname } = await import('node:path');
     // Relative report/repair paths belong to the scanned repository, not to the
     // Host's process.cwd(): the model says "reports/scan.md" meaning the repo.
-    const resolveOutput = (requested) => (isAbsolute(requested) ? requested : resolvePath(root, requested));
+    // scopedOutputPath() then holds the write to the session workspace/temp area
+    // — never to whatever directory the caller named as `path`.
+    const anchor = settings.workspace || directoryOf(exec?.agent) || sessionRoot || lastRoot || null;
 
     let reportPath = '';
     if (typeof args.output === 'string' && args.output.trim()) {
-      reportPath = resolveOutput(args.output.trim());
+      const scoped = scopedOutputPath(args.output.trim(), { root, anchor });
+      if (scoped.path === null) {
+        return { root, reportPath: '', exitCode: 2, verdict: 'error', score: 0, grade: '', message: scoped.error };
+      }
+      reportPath = scoped.path;
       try {
         mkdirSync(dirname(reportPath), { recursive: true });
       } catch (mkdirError) {
@@ -862,7 +1002,11 @@ export function apply(ctx, rawConfig) {
 
     let promptPath = '';
     if (typeof args.aiPrompt === 'string' && args.aiPrompt.trim()) {
-      promptPath = resolveOutput(args.aiPrompt.trim());
+      const scoped = scopedOutputPath(args.aiPrompt.trim(), { root, anchor });
+      if (scoped.path === null) {
+        return { root, reportPath, exitCode: 2, verdict: 'error', score: 0, grade: '', message: scoped.error };
+      }
+      promptPath = scoped.path;
       try {
         mkdirSync(dirname(promptPath), { recursive: true });
       } catch (mkdirError) {
@@ -912,26 +1056,26 @@ export function apply(ctx, rawConfig) {
     }
     // The report body stays out of the model's context: `stderr` carries the
     // CLI receipt, and a caller who wants the document passes `output=`.
+    // Both are derived from the scanned tree, so they travel inside the same
+    // untrusted boundary the guard tool uses.
     const tail = stderr.slice(-600);
-    const message = [
+    const own = [
       gate
-        ? `门禁命中（fail-on=${args.failOn ?? '策略默认'}），退出码 1。`
+        ? `门禁命中（fail-on=${oneLine(args.failOn ?? '策略默认', 40)}），退出码 1。`
         : outcome.code === 0
           ? '扫描完成，门禁通过（退出码 0）。'
           : `扫描失败（退出码 ${outcome.code}）。`,
       formatNote,
       silentDowngrade ? `未指定 output：已用 JSON 摘要代替 ${format} 报告（需要报告就传 output=…）。` : '',
       reportPath
-        ? `报告：${reportPath}`
+        ? `报告：${oneLine(reportPath, 300)}`
         : format === 'json'
           ? '报告：未落盘（需要完整 JSON 就传 output=…）'
           : '报告：未落盘——报告正文没有塞进上下文；需要的话传 output=… 写入文件后再读。',
-      promptPath ? `修复指令：${promptPath}` : '',
-      receipt,
-      tail ? `输出：\n${tail}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+      promptPath ? `修复指令：${oneLine(promptPath, 300)}` : '',
+    ].filter(Boolean);
+    const payloadText = [receipt, tail ? `输出：${oneLine(tail, 600)}` : ''].filter(Boolean);
+    const message = [...own, payloadText.length > 0 ? wrapUntrusted(payloadText) : ''].filter(Boolean).join('\n');
     return {
       root,
       reportPath,
@@ -940,6 +1084,96 @@ export function apply(ctx, rawConfig) {
       score: 0,
       grade: '',
       message,
+    };
+  }
+
+  /**
+   * Progress: read the local history ledger (`provemark progress --json`) or
+   * write the self-contained dashboard. The history file lives in the user's
+   * cache directory, never inside the scanned repository.
+   */
+  async function runProgress(args, exec) {
+    const action = args.action === 'dashboard' ? 'dashboard' : 'summary';
+    const all = Boolean(args.all);
+    const days = clamp(args.days ?? 0, 0, 3650);
+    let root = '';
+    if (!all) {
+      const resolved = guardedRoot(args, exec);
+      if (resolved.root === null) {
+        return { action, root: '', error: `无法定位项目：${resolved.error}`, message: '' };
+      }
+      root = resolved.root;
+    }
+    const timeoutMs = settings.toolTimeoutMs;
+
+    if (action === 'dashboard') {
+      const anchor = settings.workspace || directoryOf(exec?.agent) || sessionRoot || lastRoot || null;
+      const base = all ? anchor || tmpdir() : root;
+      const requested = typeof args.output === 'string' && args.output.trim() ? args.output.trim() : 'provemark-progress.html';
+      const scoped = scopedOutputPath(requested, { root: base, anchor });
+      if (scoped.path === null) {
+        return { action, root: root || scoped.error, reportPath: '', error: scoped.error, message: '' };
+      }
+      const cliArgs = ['dashboard'];
+      if (all) cliArgs.push('--all');
+      else cliArgs.push(root);
+      if (days > 0) cliArgs.push('--days', String(days));
+      cliArgs.push('-o', scoped.path);
+      const outcome = await runProvemark(cliArgs, { timeoutMs, signal: exec?.signal });
+      if (outcome.timedOut) {
+        return { action, root, reportPath: '', error: `生成仪表盘超时（${Math.round(timeoutMs / 1000)}s）。`, message: '' };
+      }
+      if (outcome.code !== 0) {
+        return {
+          action,
+          root,
+          reportPath: '',
+          error: oneLine(String(outcome.stderr ?? '').trim() || `退出码 ${outcome.code}`, 400),
+          message: '',
+        };
+      }
+      return { action, root, reportPath: scoped.path, projects: 0, scans: 0, message: '' };
+    }
+
+    const cliArgs = all ? ['progress', '--all', '--json'] : ['progress', root, '--json'];
+    if (days > 0) cliArgs.push('--days', String(days));
+    const outcome = await runProvemark(cliArgs, { timeoutMs, signal: exec?.signal });
+    if (outcome.timedOut) {
+      return { action, root, error: `进度查询超时（${Math.round(timeoutMs / 1000)}s）。`, message: '' };
+    }
+    const data = parseScanJson(outcome.stdout);
+    if (data === null) {
+      return {
+        action,
+        root,
+        error: oneLine(String(outcome.stderr ?? '').trim() || '进度查询没有返回 JSON', 400),
+        message: '',
+      };
+    }
+    if (all) {
+      const totals = data.totals ?? {};
+      return {
+        action,
+        root,
+        projects: Number(totals.projects ?? 0),
+        scans: Number(totals.scans ?? 0),
+        open: Number(totals.open ?? 0),
+        data,
+        message: '',
+      };
+    }
+    const current = data.current ?? {};
+    return {
+      action,
+      root: String(data.root ?? root),
+      scans: Number(data.scans ?? 0),
+      score: Number(current.score ?? 0),
+      grade: String(current.grade ?? ''),
+      open: Number(data.open_count ?? 0),
+      fixed: Number(data.fixed_count ?? 0),
+      reopened: Number(data.reopened_count ?? 0),
+      data,
+      message: '',
     };
   }
 
