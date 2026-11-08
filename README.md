@@ -137,7 +137,7 @@ fastapi 用 `uv.lock` 锁定了 213 个包。但**当时 Provemark 并不认识 
 
 这类结论在没有锁文件解析时**根本不可能出现**——版本未知，OSV 就无从查询。
 
-### ⚡ 案例二：click —— 三个「致命」依赖
+### 🧨 案例二：click —— 三个「致命」依赖
 
 ```
 [致命] DEP-001  anyio 4.13.0 存在 4 个已知漏洞
@@ -644,7 +644,7 @@ provemark scan . --skip pii          # 整体跳过
 - run: provemark scan --fail-on high --min-confidence 0.5 --format sarif -o provemark.sarif
 ```
 
-### 🅰️ 用 Action（推荐）
+### ✅ 用 Action（推荐）
 
 仓库自带 composite Action，版本与 CLI 始终一致（安装的是 action 自己的 ref，不走 PyPI）：
 
