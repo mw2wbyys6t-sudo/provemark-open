@@ -89,3 +89,9 @@ rule = "AI-008"
 path = "tests/**"
 reason = "测试样本字符串里刻意写入的 print/console.log（如 Go fixture 的 fmt.Println），不是本项目调试残留"
 expires = "2027-12-31"
+
+[[ignore]]
+rule = "SEC-009"
+path = "tests/**"
+reason = "凭据检测用例里刻意写入的假私钥文本，用于验证检测逻辑，不是真实密钥"
+expires = "2027-12-31"

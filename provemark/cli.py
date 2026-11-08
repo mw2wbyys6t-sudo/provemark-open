@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import sys
 from pathlib import Path
 
-from . import __version__, ai_usage, fossa_deps, notices, vendored
+from . import __version__, ai_usage, fossa_deps, history, notices, vendored
 from .config import DEFAULT_CONFIG_TEMPLATE, ConfigError, find_config_file, load_config
 from .engine import gate_failed, run_scan
-from .fixers import apply_action, install_hook, plan, uninstall_hook
+from .fixers import FIX_TARGETS, apply_action, install_hook, plan, uninstall_hook
 from .report import FORMATS, ai_fix_prompt, dump, format_for_output, render
+from .report import dashboard as dashboard_report
 from .report.console import use_color
 from .rules.catalog import catalog
 
@@ -54,6 +56,37 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="读取 FOSSA / CycloneDX / SPDX 的 JSON SBOM，与本地许可证结论交叉核对",
     )
+    scan.add_argument(
+        "--no-history",
+        action="store_true",
+        help="不把本次结果写入进度历史（默认写入，供 progress / dashboard 使用）",
+    )
+    scan.add_argument(
+        "--history-source",
+        default="cli",
+        metavar="NAME",
+        help="写入历史时记录的来源标记（默认 cli；插件传 dsh）",
+    )
+    scan.add_argument(
+        "--history-file",
+        metavar="FILE",
+        help="覆盖历史库路径（默认取 $PROVEMARK_HISTORY_FILE 或缓存目录）",
+    )
+
+    progress = sub.add_parser("progress", help="查看单个项目或全部项目的进度")
+    progress.add_argument("path", nargs="?", default=".", help="项目路径（默认当前目录）")
+    progress.add_argument("--all", action="store_true", help="列出本机所有项目的进度")
+    progress.add_argument("--days", type=int, default=0, help="只看最近 N 天（默认全部）")
+    progress.add_argument("--json", action="store_true", dest="as_json", help="输出 JSON（给工具/脚本消费）")
+    progress.add_argument("--history-file", metavar="FILE", help="覆盖历史库路径")
+
+    board = sub.add_parser("dashboard", help="生成单文件 HTML 进度仪表盘")
+    board.add_argument("path", nargs="?", default=".", help="项目路径（默认当前目录）")
+    board.add_argument("--all", action="store_true", help="汇总本机所有项目")
+    board.add_argument("-o", "--output", help="输出文件（默认 <项目>/provemark-progress.html）")
+    board.add_argument("--days", type=int, default=0, help="只看最近 N 天（默认全部）")
+    board.add_argument("--print", dest="print_only", action="store_true", help="输出到 stdout，不写文件")
+    board.add_argument("--history-file", metavar="FILE", help="覆盖历史库路径")
 
     init = sub.add_parser("init", help="初始化策略文件与 CI（只创建缺失文件）")
     init.add_argument("path", nargs="?", default=".")
@@ -219,6 +252,20 @@ def cmd_scan(args: argparse.Namespace) -> int:
         print(f"扫描失败：{exc}", file=sys.stderr)
         return 2
 
+    # Progress tracking is best-effort: a read-only cache directory or a full disk
+    # must never turn a successful scan into a failed command.
+    # A scope-limited scan (--only / --skip / --staged) is not the project's state,
+    # so it never becomes a progress point — otherwise the timeline would mix
+    # "pii only" scores with full scans.
+    partial = bool(only) or bool(skip) or bool(args.staged)
+    if not getattr(args, "no_history", False) and not partial:
+        _record_history(
+            result,
+            source=getattr(args, "history_source", "cli") or "cli",
+            mode="offline" if args.offline else "online",
+            path=getattr(args, "history_file", None),
+        )
+
     fmt = format_for_output(args.output or "", args.format)
     try:
         if args.output:
@@ -254,6 +301,18 @@ def cmd_scan(args: argparse.Namespace) -> int:
         return 2
 
     return 1 if gate_failed(result, fail_on, min_confidence) else 0
+
+
+def _record_history(result, *, source: str, mode: str, path: str | None) -> None:
+    target = Path(path).expanduser() if path else None
+    try:
+        record = history.record_from_scan(result, source=source, mode=mode)
+        appended = history.append_record(record, path=target)
+    except (OSError, ValueError, TypeError) as exc:
+        print(f"提示：本次进度未写入历史（{exc}）；扫描结果不受影响。", file=sys.stderr)
+        return
+    if appended is None and not os.environ.get("PROVEMARK_QUIET_HISTORY"):
+        print("提示：本次结果与上次完全相同，已并入已有历史记录点。", file=sys.stderr)
 
 
 def _summary_line(result) -> str:
@@ -333,6 +392,13 @@ def cmd_fix(args: argparse.Namespace) -> int:
         return 2
     _warn_legacy_config(config)
     only = _split(args.only)
+    for name in only or []:
+        if name not in FIX_TARGETS:
+            print(
+                f"未知修复项：{name}（可选：{', '.join(FIX_TARGETS)}）",
+                file=sys.stderr,
+            )
+            return 2
     actions = plan(
         root,
         config,
@@ -585,6 +651,133 @@ def cmd_vendored(args: argparse.Namespace) -> int:
     return 0
 
 
+def _history_path(args: argparse.Namespace) -> Path | None:
+    raw = getattr(args, "history_file", None)
+    return Path(raw).expanduser() if raw else None
+
+
+def cmd_progress(args: argparse.Namespace) -> int:
+    records = history.load_history(_history_path(args))
+    if not records:
+        print("历史库还是空的：先扫描一次任意项目，之后就能在这里看进度。")
+        return 0
+
+    if args.all:
+        report = history.build_report(records, days=args.days, path=_history_path(args))
+        if args.as_json:
+            sys.stdout.write(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+            return 0
+        _print_overview(report)
+        return 0
+
+    root = Path(args.path).expanduser().resolve()
+    events = history.project_events(records, str(root))
+    if not events:
+        print(f"{root} 还没有扫描记录。跑一次 `provemark scan {root}` 后即可跟踪进度。")
+        return 0
+    if args.days:
+        events = history.filter_recent(events, args.days)
+    progress = history.project_progress(events)
+    if args.as_json:
+        sys.stdout.write(json.dumps(progress, ensure_ascii=False, indent=2) + "\n")
+        return 0
+    _print_project(progress)
+    return 0
+
+
+def _print_overview(report: dict) -> None:
+    totals = report.get("totals", {})
+    projects = report.get("projects", [])
+    print(f"Provemark 进度 · 本机 {totals.get('projects', 0)} 个项目 · {totals.get('scans', 0)} 次扫描")
+    print(f"  未修复 {totals.get('open', 0)} 条 · 近 7 天修复 {totals.get('fixed_recent', 0)} / 新增 {totals.get('new_recent', 0)}")
+    print()
+    header = f"{'项目':<44}{'分数':>6}{'等级':>5}{'未修复':>7}{'7天修/新':>11}  最近扫描"
+    print(header)
+    print("-" * len(header))
+    for project in projects:
+        current = project.get("current", {}) or {}
+        root = str(project.get("root", ""))
+        shown = root if len(root) <= 42 else "…" + root[-41:]
+        recent = project.get("last_ts", "")
+        print(
+            f"{shown:<44}{str(current.get('score', '—')):>6}{str(current.get('grade', '—')):>5}"
+            f"{project.get('open_count', 0):>7}"
+            f"{str(len(project.get('fixed_recent', []) or [])) + '/' + str(len(project.get('new_recent', []) or [])):>11}"
+            f"  {str(recent).replace('T', ' ').replace('Z', '')}"
+        )
+
+
+def _print_project(progress: dict) -> None:
+    current = progress.get("current", {}) or {}
+    counts = current.get("counts", {}) or {}
+    delta = progress.get("delta_score")
+    delta_text = "首次记录" if delta is None else (f"较首次 {delta:+d}" if delta else "与首次持平")
+    print(f"Provemark 进度 · {progress.get('root', '')}")
+    print(
+        f"  当前 {current.get('score', '—')}/100 {current.get('grade', '—')}（{delta_text}）"
+        f" · {progress.get('scans', 0)} 次扫描 · 最近 {str(progress.get('last_ts', '')).replace('T', ' ').replace('Z', '')}"
+    )
+    print(
+        f"  未修复 {progress.get('open_count', 0)}：致命 {counts.get('critical', 0)} · 高危 {counts.get('high', 0)}"
+        f" · 中危 {counts.get('medium', 0)} · 低危 {counts.get('low', 0)} · 提示 {counts.get('info', 0)}"
+    )
+    print(
+        f"  累计修掉 {progress.get('fixed_count', 0)} · 复发 {progress.get('reopened_count', 0)}"
+        f" · 近 7 天：修复 {len(progress.get('fixed_recent', []) or [])} / 新增 {len(progress.get('new_recent', []) or [])}"
+    )
+    entries = progress.get("open", []) or []
+    if entries:
+        print()
+        print(f"  未修复问题（{len(entries)}）")
+        for entry in entries[:12]:
+            location = entry.get("path") or "（仓库级）"
+            print(
+                f"    [{str(entry.get('severity', '')):<8}] {entry.get('rule', ''):<8} {location}"
+                f"   首次 {str(entry.get('first_ts', '')).replace('T', ' ').replace('Z', '')}"
+            )
+        if len(entries) > 12:
+            print(f"    …还有 {len(entries) - 12} 条")
+
+
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    records = history.load_history(_history_path(args))
+    if not records:
+        print("历史库还是空的：先扫描一次任意项目，再来生成仪表盘。")
+        return 0
+    if args.all:
+        report = history.build_report(records, days=args.days, path=_history_path(args))
+        title = "Provemark 进度 · 全部项目"
+        default_target = Path.cwd() / "provemark-progress.html"
+    else:
+        root = Path(args.path).expanduser().resolve()
+        report = history.build_report(records, days=args.days, roots=[str(root)], path=_history_path(args))
+        title = f"Provemark 进度 · {root.name}"
+        default_target = root / "provemark-progress.html"
+        if not report.get("projects"):
+            print(f"{root} 还没有扫描记录。跑一次 `provemark scan {root}` 后即可生成仪表盘。")
+            return 0
+
+    document = dashboard_report.render_dashboard(report, title=title)
+    if args.print_only:
+        sys.stdout.buffer.write(document.encode("utf-8"))
+        return 0
+    target = Path(args.output).expanduser() if args.output else default_target
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(document, encoding="utf-8")
+    except OSError as exc:
+        print(f"写入失败：{exc}", file=sys.stderr)
+        return 2
+    totals = report.get("totals", {})
+    print(f"仪表盘已生成：{target}")
+    print(
+        f"  {totals.get('projects', 0)} 个项目 · {totals.get('scans', 0)} 次扫描"
+        f" · 未修复 {totals.get('open', 0)} 条 · 近 7 天修复 {totals.get('fixed_recent', 0)}"
+    )
+    print(f"  历史库：{report.get('history_path', '')}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -603,6 +796,8 @@ def main(argv: list[str] | None = None) -> int:
         "notices": cmd_notices,
         "ai-usage": cmd_ai_usage,
         "vendored": cmd_vendored,
+        "progress": cmd_progress,
+        "dashboard": cmd_dashboard,
     }
     handler = handlers.get(args.command)
     if handler is None:

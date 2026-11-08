@@ -988,6 +988,134 @@ def parse_deno_json(path: Path, root: Path, result: Any) -> None:
         )
 
 
+def _py_name(name: str) -> str:
+    from .deps import norm_python
+
+    return norm_python(name)
+
+
+def _py_version(text: str) -> str:
+    value = (text or "").strip().lstrip("=").strip()
+    return value if value[:1].isdigit() else ""
+
+
+def _lock_scope(item: dict[str, Any]) -> str:
+    # poetry 1.x 写 category，poetry 2.x / pdm 写 groups；只有主分组才是运行时依赖
+    category = str(item.get("category") or "").strip().lower()
+    if category:
+        return "dev" if category == "dev" else "runtime"
+    groups = item.get("groups")
+    if isinstance(groups, list):
+        names = {str(group).strip().lower() for group in groups}
+        if names and not names & {"main", "default"}:
+            return "dev"
+    return "runtime"
+
+
+def _add_locked(
+    result: Any,
+    path: Path,
+    root: Path,
+    name: str,
+    version: str,
+    *,
+    scope: str = "runtime",
+    locator: str = "",
+) -> None:
+    clean = _py_name(name)
+    resolved = _py_version(version)
+    if not clean or not resolved:
+        return
+    result.packages.append(
+        Package(
+            name=clean,
+            ecosystem="PyPI",
+            version=resolved,
+            declared=resolved,
+            scope=scope,
+            manifest=_rel(path, root),
+            # 锁文件里既有直接依赖也有传递依赖，是否直连由清单文件决定
+            direct=False,
+            locator=locator,
+        )
+    )
+
+
+def _uv_locator(item: dict[str, Any]) -> str:
+    # uv.lock 用 source 区分来源，只有 registry 才是 PyPI 发布版本
+    source = item.get("source")
+    if not isinstance(source, dict):
+        return ""
+    if "git" in source:
+        return "url:git"
+    if "url" in source:
+        return "url:http"
+    if "path" in source or "editable" in source or "virtual" in source:
+        return "file:."
+    return ""
+
+
+def parse_uv_lock(path: Path, root: Path, result: Any) -> None:
+    data = _toml(path)
+    if not isinstance(data, dict):
+        return
+    for item in data.get("package") or []:
+        if not isinstance(item, dict):
+            continue
+        _add_locked(
+            result,
+            path,
+            root,
+            str(item.get("name") or ""),
+            str(item.get("version") or ""),
+            locator=_uv_locator(item),
+        )
+
+
+def _parse_toml_package_lock(path: Path, root: Path, result: Any) -> None:
+    data = _toml(path)
+    if not isinstance(data, dict):
+        return
+    for item in data.get("package") or []:
+        if not isinstance(item, dict):
+            continue
+        _add_locked(
+            result,
+            path,
+            root,
+            str(item.get("name") or ""),
+            str(item.get("version") or ""),
+            scope=_lock_scope(item),
+        )
+
+
+def parse_poetry_lock(path: Path, root: Path, result: Any) -> None:
+    _parse_toml_package_lock(path, root, result)
+
+
+def parse_pdm_lock(path: Path, root: Path, result: Any) -> None:
+    _parse_toml_package_lock(path, root, result)
+
+
+def parse_pipfile_lock(path: Path, root: Path, result: Any) -> None:
+    # Pipfile.lock 的版本写成 "==1.2.3"，default 是运行时、develop 是开发依赖
+    data = _json(path)
+    if not isinstance(data, dict):
+        return
+    for section, scope in (("default", "runtime"), ("develop", "dev")):
+        for name, meta in (data.get(section) or {}).items():
+            if not isinstance(meta, dict):
+                continue
+            _add_locked(
+                result,
+                path,
+                root,
+                str(name),
+                str(meta.get("version") or ""),
+                scope=scope,
+            )
+
+
 def parse_actions(root: Path, config: Any, result: Any) -> None:
     workflows = root / ".github" / "workflows"
     if not workflows.is_dir():
@@ -1008,6 +1136,10 @@ def parse_actions(root: Path, config: Any, result: Any) -> None:
 
 
 HANDLERS: tuple[tuple[str, str, Handler], ...] = (
+    ("uv.lock", "lock", parse_uv_lock),
+    ("poetry.lock", "lock", parse_poetry_lock),
+    ("Pipfile.lock", "lock", parse_pipfile_lock),
+    ("pdm.lock", "lock", parse_pdm_lock),
     ("pom.xml", "manifest", parse_pom),
     ("build.gradle", "manifest", parse_gradle),
     ("build.gradle.kts", "manifest", parse_gradle),

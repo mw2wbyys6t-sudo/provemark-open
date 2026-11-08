@@ -17,6 +17,16 @@ from .rules.license_texts import APACHE2_TEXT
 
 LICENSE_FILE_NAMES = ("LICENSE", "LICENSE.md", "LICENSE.txt", "LICENCE", "COPYING")
 
+# `fix --only` 的可选范围。放在模块级，CLI 才能在执行前校验用户输入，
+# 避免拼错时静默地什么都不做。
+FIX_TARGETS = {
+    "license": "LICENSE",
+    "gitignore": ".gitignore",
+    "security": "SECURITY.md",
+    "config": ".provemark.toml",
+    "ci": ".github/workflows",
+}
+
 MIT_TEXT = """MIT License
 
 Copyright (c) {year} {holder}
@@ -140,12 +150,12 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     env:
-      # 如果你还没有把 Provemark 发布到 PyPI，改成 git 地址，例如：
-      # PROVEMARK_SPEC: "git+https://github.com/<owner>/provemark.git@main"
-      PROVEMARK_SPEC: "provemark"
+      # 默认从源码仓库安装（官方包尚未发布到 PyPI）。
+      # 如果你把 Provemark 发布到了 PyPI，把下面这行改成 "provemark" 即可。
+      PROVEMARK_SPEC: "git+https://github.com/mw2wbyys6t-sudo/provemark-open@v0.6.2"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - name: Install scanner
@@ -154,7 +164,7 @@ jobs:
         run: provemark scan --fail-on high --min-confidence 0.5 --format sarif -o provemark.sarif
       - name: Upload SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: provemark.sarif
 """
@@ -419,14 +429,7 @@ def plan(
         )
 
     if only:
-        targets = {
-            "license": "LICENSE",
-            "gitignore": ".gitignore",
-            "security": "SECURITY.md",
-            "config": ".provemark.toml",
-            "ci": ".github/workflows",
-        }
-        wanted = [targets.get(token, token) for token in only]
+        wanted = [FIX_TARGETS.get(token, token) for token in only]
         actions = [
             action for action in actions if any(action.path.startswith(path) for path in wanted)
         ]
@@ -437,6 +440,21 @@ def apply_action(root: Path, action: Action, *, force: bool = False) -> str:
     if action.skipped:
         return f"跳过 {action.path}"
     target = root / action.path
+    # A repository can ship `.gitignore -> ~/.bashrc`, or a dangling symlink where
+    # the fixer wants to create a file. Writing through either would edit a file
+    # outside the project — the one thing a "safe fixer" must never do.
+    root_path = Path(root)
+    try:
+        relative_parent = target.parent.relative_to(root_path)
+    except ValueError:
+        return f"跳过 {action.path}（目标越界）"
+    probe = root_path
+    for part in relative_parent.parts:
+        probe = probe / part
+        if probe.is_symlink():
+            return f"跳过 {action.path}（路径包含符号链接 {part}）"
+    if target.is_symlink():
+        return f"跳过 {action.path}（目标本身是符号链接）"
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         if action.kind == "create":

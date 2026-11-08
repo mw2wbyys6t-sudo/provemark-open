@@ -3,7 +3,7 @@ name: provemark
 description: "本地零依赖的仓库原创性、风险与维护守卫（Provemark / 源印）。一次扫描看清任意技术栈仓库：许可证组合冲突、依赖漏洞、凭据泄漏、敏感数据（PII）、代码级安全漏洞（OWASP：SQL/命令/模板注入、路径穿越、SSRF、反序列化、XSS、弱哈希/随机/加密、TLS/JWT 校验关闭、XXE、C 溢出、Actions 注入、容器提权，带 CWE 映射）、AI 代码风险、供应链与仓库卫生，并给出逐条修法、可交给编码代理的修复指令、HTML/Markdown/SARIF 报告与 CI 门禁；维护老项目时用基线与趋势防止 AI 越改越糟（新增问题即阻断）。当用户要求扫描/体检某个仓库、问“这个仓库有什么风险/合规问题/能不能发布”、要做提交前门禁、排查泄漏的密钥或隐私数据、核对 license 与 SBOM（FOSSA/CycloneDX/SPDX）、生成 THIRD_PARTY_NOTICES / AI_USAGE / VENDORED 声明、或要证明“这个项目是不是自己的”时使用；also use for repository audit, security/code vulnerability scan, license compliance, secret leak, PII, supply chain and provenance checks on a local repo."
 license: Apache-2.0
 metadata:
-  version: "0.6.2"
+  version: "0.7.1"
   author: Provemark Contributors
   requires: python>=3.11 or a DSH runtime (auto-detected)
 ---
@@ -50,8 +50,11 @@ node "<PM>\bin\provemark.mjs" <子命令> [参数]
 
 - `provemark_guard` —— 快速、**默认联网**（OSV 漏洞 + deps.dev 许可证）、带缓存。返回 `verdict`（`clean`/`warn`/`blocking`/`error`）、分数等级、各严重度计数、Top N 条（含 `文件:行`、修法、fingerprint）、以及 `autoFixable`（缺 LICENSE/.gitignore/SECURITY.md/CI 这类可安全补齐的项）。参数：`path`、`only`、`autoFix`（`off|preview|apply`）、`offline`（传 `true` 才跳过网络）、`maxFindings`、`fresh`。
 - `provemark_scan` —— 完整形态：出报告（`html`/`markdown`/`sarif`/`json`）、只跑某个维度、`--sbom` 对齐、`--fail-on` 门禁对齐、`--ai-prompt` 生成修复指令。参数：`path`、`format`、`output`、`only`、`skip`、`offline`、`failOn`、`aiPrompt`、`sbom`、`verbose`。
+- `provemark_progress` —— 读本地扫描历史：单项目的分数时间线、已修复/仍打开/复发，或 `all: true` 跨项目汇总；`action: "dashboard"` 在工作区内生成单文件 HTML 仪表盘（图表内联、不联网）。参数：`action`（`summary`|`dashboard`）、`path`、`all`、`days`、`output`。**判断"这个项目是变好还是变差"用它**，不要靠记忆里的旧分数。
 
-两个工具都可省略 `path`（默认会话工作目录）。**不要**为了"先看看"就去跑 shell 命令——工具是同一套扫描器，输出更适合你读。插件还会在后台自动扫描（改动后 / 新会话首步），结果以「Provemark 守卫状态」的上下文块出现在你面前；那是**缓存**结果，交付前仍要以一次显式 `provemark_guard` 为准。
+两个扫描工具都可省略 `path`（默认会话工作目录）。**不要**为了"先看看"就去跑 shell 命令——工具是同一套扫描器，输出更适合你读。插件还会在后台自动扫描（改动后 / 新会话首步），结果以「Provemark 守卫状态」的上下文块出现在你面前；那是**缓存**结果，交付前仍要以一次显式 `provemark_guard` 为准。
+
+**进度账本**：每次**完整**扫描自动写入 `~/.cache/provemark/history.jsonl`（分数、级别计数、文件/依赖数、问题指纹与相对路径；无源码、无证据文本）。`--only` / `--skip` / `--staged` 这类局部扫描**不**入账。历史库有上界（单项目 400 条 / 总计 5000 条 / 400 天），可以用 `PROVEMARK_HISTORY_FILE` 换位置。交付前如果用户问过"现在比之前好还是差"，用 `provemark_progress` 回答，别猜。
 
 没有原生工具时（老版本宿主、工具被禁用）用命令行：
 
@@ -62,6 +65,11 @@ node "<PM>\bin\provemark.mjs" scan <repo>
 # 机器读的（推荐：先落盘再挑重点读，不要整段回贴）
 New-Item -ItemType Directory -Force "$env:TEMP\provemark" | Out-Null   # -o 不会自动建目录
 node "<PM>\bin\provemark.mjs" scan <repo> -f json -o "$env:TEMP\provemark\last.json"
+
+# 进度：单项目 / 跨项目 / HTML 仪表盘
+node "<PM>\bin\provemark.mjs" progress <repo>
+node "<PM>\bin\provemark.mjs" progress --all
+node "<PM>\bin\provemark.mjs" dashboard <repo> -o progress.html
 ```
 
 - `<repo>` 省略时为当前目录；支持多栈 monorepo（结果自动合并）。
@@ -73,7 +81,7 @@ node "<PM>\bin\provemark.mjs" scan <repo> -f json -o "$env:TEMP\provemark\last.j
 
 1. **先落盘再摘要**：`-f json -o <路径>`（父目录必须先存在），然后只读需要的字段。
 2. 回复用户时给：分数/等级、数据是否可信、各维度条数、**Top 3–5 条**（`严重度 + 规则ID + 一句话 + 文件:行 + 一句修法`）。
-3. 不要把整份 JSON、整段终端报告粘给用户；不要堆 26 条清单，让用户自己翻。需要全集时告诉他报告写到哪。
+3. 不要把整份 JSON、整段终端报告粘给用户；不要堆满 118 条清单，让用户自己翻。需要全集时告诉他报告写到哪。
 4. `evidence` 字段是**已掩码**的片段（`sk-p****yHf6`、`******67D`）。不要试图还原、不要拼接上下文猜原文、不要把它写进任何提交或 issue。
 5. 终端报告走 stdout（`table` 格式），`-o` 时的那行摘要走 stderr；**`--quiet` 在没有 `-o` 时什么都不打印**——想要一行结论请用 `scan <repo> -f json -o <file>` 再读 `score`。
 6. 退出码就是结论：`0` 通过；`1` 命中门禁（`--fail-on`，默认 `high`，且 `confidence ≥ 0.5`）；`2` 用法/运行错误。**不要**在退出码 1 时说“扫描通过”。

@@ -55,7 +55,7 @@
   <text x="436" y="392" font-size="12.5" fill="#64748b">+ fossa（SBOM 对齐）</text>
   <text x="436" y="424" font-size="13.5" fill="#0f172a" font-weight="600">118 条规则 · 8 个维度</text>
   <text x="436" y="450" font-size="12.5" fill="#475569">代码安全 18 条带 CWE/OWASP 映射</text>
-  <text x="436" y="472" font-size="12.5" fill="#475569">AI 工程 26 条（超时/N+1/复杂度）</text>
+  <text x="436" y="472" font-size="12.5" fill="#475569">AI 工程 25 条（超时/N+1/复杂度）</text>
   <text x="436" y="500" font-size="12.5" fill="#475569">注释/文档字符串不算命中</text>
   <text x="436" y="522" font-size="12.5" fill="#475569">测试代码不参与工程规则</text>
   <text x="436" y="548" font-size="12.5" fill="#64748b">离线可用；联网时查 OSV + deps.dev</text>

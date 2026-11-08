@@ -1,12 +1,140 @@
 # Provemark · 源印
 
-> 一条命令，在本机看清**任意技术栈**仓库的原创性与风险：许可证污染、依赖漏洞、凭据泄漏、敏感数据、代码级安全漏洞（OWASP Top 10）、AI 代码风险、供应链隐患，并给出能直接执行的修法。
+> 给 AI 编码时代用的仓库守卫：**在模型动手之前**就把许可证冲突、依赖漏洞、凭据泄漏、敏感数据、代码级漏洞（OWASP Top 10）和供应链隐患摆到台面上，并给出能直接执行的修法。
 
 ```bash
-provemark scan
+provemark scan          # 命令行：一次性体检
 ```
 
-不注册账号、不上传代码、不装第三方运行时依赖。Python / Node / Go / Rust / Java / Kotlin / Scala / C# / Ruby / PHP / Dart / Swift / Elixir / R / Haskell / C++ / Clojure / Julia / Perl / Conda 一次扫完。
+作为 **DeepSeek Harness 常驻插件**，它把同一套扫描引擎挂进模型的工作循环：红线进系统提示词、扫描结论进上下文、工具按需调用、交付前有基线棘轮。**不注册账号、不上传代码、不装第三方运行时依赖。**
+
+<div align="center">
+
+| 指标 | 数值 |
+| --- | --- |
+| 规则 | **118** 条，8 个维度 |
+| 生态 | **19** 个（PyPI / npm / Go / crates.io / Maven / NuGet / RubyGems / Packagist / Pub / SwiftURL / Hex / CRAN / Hackage / Julia / CPAN / ConanCenter / vcpkg / Conda / GitHub Actions） |
+| 扫描器 | **9** 个，可单独启用 |
+| 测试 | **366** 项 |
+| 运行时依赖 | **0**（Python ≥ 3.11 标准库） |
+
+</div>
+
+---
+
+## 为什么是「AI 原生」的工具
+
+一个只在 CI 里跑的扫描器，对 AI 编码流的价值有限——因为**问题是在模型写代码那一刻产生的，不是在 CI 跑完那一刻**。
+
+模型会顺手 `import` 一个不存在的包，会把密钥写进 `config.py`，会用 `except: pass` 盖住异常，会在 `try` 里调外部接口却不设超时。这些问题在传统流程里要等人工 review 或 CI 红灯才发现，而那时它们已经进了 Git 历史。
+
+Provemark 的做法是**把检查前移到决策发生的地方**：
+
+```
+        ┌─────────────────────────────────────────────┐
+        │  常驻提示词：红线（4725 字符，静态，一次装载）  │
+        └─────────────────────────────────────────────┘
+                              ↓
+   ┌──────────────┐   ┌──────────────────────────────────┐
+   │ 模型开始写码  │ → │ 扫描结论进上下文（423 字符/次）  │ → 写完自动复扫
+   └──────────────┘   └──────────────────────────────────┘
+                              ↓
+                    有 high/critical 就拦住，模型必须修
+```
+
+### 结论直接进上下文，而不是让模型自己去翻
+
+模型要发现「`src/db.py:42` 有 SQL 拼接」，通常得先 `grep` 再 `read` 那个文件——每一次文件读取都是几百到几千 token，而且经常读错文件、漏掉别处。
+
+Provemark 把扫描结果压成一块 **423 字符 / 15 行**的状态摘要，直接放进上下文：
+
+```
+## Provemark 守卫状态
+工作区：/workspace/demo
+最近扫描：2026-11-06T22:00:00Z · 联网 · 412 个文件 · 63 个依赖
+结论：87/100 B · 致命 0 / 高危 1 / 中危 4 / 低危 9 / 提示 6
+注意：2 个依赖未做漏洞查询
+优先处理：
+- [high] SEC-002 SQL 拼接 src/db.py:42
+  修法：用参数化查询
+- [medium] AI-004 异常被吞掉 src/api.py:88
+  修法：记录日志
+- [low] HYG-014 缺少 THIRD_PARTY_NOTICES
+  修法：运行 provemark notices
+可自动修：LICENSE、.gitignore —— 需要时调用 provemark_guard(autoFix="apply")。
+本会话：自动扫描 5 次 · 累计拦下高危 1 次。
+```
+
+模型拿到的是**带行号、带修法的结论**，不是一堆待解读的文件。扫描有 TTL 缓存与去抖，同一份代码不会被反复扫；`provemark_guard` / `provemark_scan` 两个原生工具只在需要时按需拉起。
+
+### 修法是「指令」，不是「建议」
+
+每条问题都给出可执行的最小改动，可以直接变成 AI 代理的任务，也可以变成 PR 上的注释：
+
+```bash
+provemark scan --ai-prompt fix.md --test-command "pytest -q"
+```
+
+---
+
+## 真实案例：在开源项目上跑出来的结果
+
+下面每一个数字都来自本机对真实仓库的扫描（`git clone --depth 1` 后运行 `provemark scan`），不是示意图。
+
+### 案例一：fastapi —— 从 0 条漏洞到 6 个真实漏洞
+
+fastapi 用 `uv.lock` 锁定了 213 个包。但**当时 Provemark 并不认识 `uv.lock`**，于是报告「79 个依赖版本无法确定」、判定「没有锁文件」，漏洞维度全空。
+
+补上 `uv.lock` / `poetry.lock` / `Pipfile.lock` / `pdm.lock` 解析后：
+
+| | 修复前 | 修复后 |
+| --- | --- | --- |
+| 解析出的依赖 | 79 | **228** |
+| 版本无法确定 | 79 | **18**（只剩 GitHub Actions 的 tag，本就没有版本） |
+| SCP-001「没有锁文件」 | 命中 | **消失** |
+| 依赖漏洞 | **0 条** | **7 条（高危 4 / 中危 2）** |
+
+命中的全部是真实 OSV 数据：
+
+```
+[高危] DEP-001  dnspython 2.8.0 存在已知漏洞（GHSA-45c3-73f7-pv4m）
+      uv.lock
+      → 升级到 dnspython>=2.9.0（pip install -U "dnspython>=2.9.0"），并同步清单下限。
+[高危] DEP-001  joserfc 1.6.8 存在 2 个已知漏洞
+[高危] DEP-001  mcp 1.26.0 存在 10 个已知漏洞
+[高危] DEP-001  pyasn1 0.6.4 存在 4 个已知漏洞
+[中危] DEP-001  pillow 12.3.0 存在 59 个已知漏洞
+[中危] DEP-001  fastmcp-slim 3.3.1 存在已知漏洞（GHSA-7xgj-8392-5q4r）
+```
+
+这类结论在没有锁文件解析时**根本不可能出现**——版本未知，OSV 就无从查询。
+
+### 案例二：click —— 三个「致命」依赖
+
+```
+[致命] DEP-001  anyio 4.13.0 存在 4 个已知漏洞
+      uv.lock
+      → 升级到 anyio>=4.14.2（pip install -U "anyio>=4.14.2"），并同步清单下限。
+[致命] DEP-001  certifi 2026.2.25 存在 2 个已知漏洞
+[致命] DEP-001  uv 0.11.3 存在 4 个已知漏洞
+```
+
+### 案例三：误报是头号敌人，所以先治误报
+
+同一个工具在真实仓库上跑出过这些**假警报**，现在都已经修掉：
+
+| 曾经的误报 | 根因 | 现在的行为 |
+| --- | --- | --- |
+| `.npmrc` 只写了 `package-lock=false` → 判「致命：凭据泄漏」 | 按文件名匹配，不看内容 | 读取内容，确实有 token/password 才报 |
+| `sphinx` 的 PyPI 元数据写着 `License :: OSI Approved :: BSD License` → 判「许可证无法确定」 | SPDX 别名表缺 `BSD License` | 归一化为 `BSD-3-Clause` |
+| README 里的 19 位 LinkedIn ID 恰好过 Luhn → 判「银行卡号，建议立即轮换支付凭证」 | 数字匹配不认语境 | URL / 路径 / 提交 SHA 里不报 |
+| `.github/security.md`（小写、在子目录）→ 判「缺少 SECURITY.md」 | 只认根目录精确名 | 大小写不敏感，根目录与 `.github/` 都认 |
+| 仓库有 `test.js` → 判「没有找到测试文件」 | 测试文件匹配式不全 | 补齐 `test.js` / `test-*.js` 等命名 |
+| `tests/certs/**` 里的过期测试证书 → 7 条「致命」泄漏，整个仓库打成 0 分 F | 测试夹具按真实泄漏计分 | 降为「高危 · 需人工确认」，仍会报出来 |
+
+最后一条尤其关键：**一个测试目录就能把仓库打成 F 分**，久而久之用户就不看这个分数了。真实凭据（`_authToken=`、私钥、`credentials.json` 里的 api_key）依然会被判致命。
+
+---
 
 ## 30 秒看懂
 
@@ -32,9 +160,9 @@ provemark scan
 | “插件和 pip 包是两套东西” | 同一套扫描引擎：pip 包是命令行；插件随包分发、不需要 `pip install`，技能文档解释每条规则。 |
 | “构建产物也会被扫” | 默认跳过 `build/`、`dist/`、`.venv/`、`node_modules/`、`*.egg-info/`、`.git/`——所以 CI 里 `pip install .` 之后扫描不会把 `build/lib/` 当源码误报。 |
 | “SARIF 里有全部问题” | SARIF 只含有文件位置的结果（GitHub Code Scanning 的要求）；缺 LICENSE / CI 这类仓库级问题保留在 JSON / HTML 报告里。 |
-| “AI 规则就是找 bug” | AI 规则（26 条）覆盖工程与算法反模式：无超时请求、循环内串行 await、N+1、`pd.concat`、`iterrows`……测试代码不参与这些规则。 |
+| “AI 规则就是找 bug” | AI 规则（25 条）覆盖工程与算法反模式：无超时请求、循环内串行 await、N+1、`pd.concat`、`iterrows`……测试代码不参与这些规则。 |
 
-> 架构图/流程图是 SVG 矢量图；报告截图来自真实运行结果，不是示意图。
+> 架构图/流程图是 SVG 矢量图；报告截图与上文的真实案例数字都来自实际运行结果，不是示意图。
 
 ---
 
@@ -88,9 +216,13 @@ provemark scan --offline       # 跳过漏洞与依赖许可证查询，其余�
 
 ## 作为 DeepSeek Harness 常驻插件使用
 
-`plugin/provemark-dsh/` 把扫描器打包成 DSH **常驻插件**：只要在这个 profile 里开发，守卫就在。扫描器源码随包分发（`python/provemark`），**不需要 `pip install`**。
+`plugin/provemark-dsh/` 把扫描器打包成 DSH **常驻插件**：只要在这个 profile 里开发，守卫就在。扫描器源码随包分发（`python/provemark`），**不需要 `pip install`**，也不需要构建步骤——纯 JS，直接被宿主以 ESM 载入。
 
 ```bash
+# 官方安装方式（DSH CLI 会把 bundle 登记进 profile）
+dsh plugin --profile web add "github:mw2wbyys6t-sudo/provemark-open#path:/plugin/provemark-dsh"
+
+# 或者用随包安装脚本（链接进 profile 的 node_modules 并登记 bundle）
 node plugin/provemark-dsh/scripts/install.mjs            # 链接进 profile 的 node_modules 并登记 bundle
 node plugin/provemark-dsh/scripts/install.mjs --check    # 自检（解析、patch 行、技能文件、随包源码）
 node plugin/provemark-dsh/scripts/selftest.mjs           # 无宿主的端到端自检（模拟 ctx，跑真实扫描）
@@ -99,12 +231,12 @@ node plugin/provemark-dsh/scripts/selftest.mjs           # 无宿主的端到端
 
 装好之后它做四件事：
 
-| 组成 | 效果 |
-| --- | --- |
-| **编码红线**（系统提示词段） | 模型写代码时就避开幻觉依赖、硬编码密钥、`except: pass`、危险调用、PII、许可证与供应链坑 |
-| **工作区状态**（动态上下文块） | 自动扫描的最新结论：分数/等级/各严重度计数 + Top 3 + 可自动修项，只在结果变化时更新 |
-| **原生工具** | `provemark_guard`（快、默认联网、带缓存）、`provemark_scan`（出报告 / 单维度 / 门禁 / AI 修复指令） |
-| **安全自动修复** | `autoFix: apply` 只补缺失的 LICENSE / .gitignore 条目 / SECURITY.md / CI 工作流，绝不改业务代码 |
+| 组成 | 效果 | 成本 |
+| --- | --- | --- |
+| **编码红线**（系统提示词段） | 模型写代码时就避开幻觉依赖、硬编码密钥、`except: pass`、危险调用、PII、许可证与供应链坑 | 4725 字符，静态，一次装载 |
+| **工作区状态**（动态上下文块） | 自动扫描的最新结论：分数/等级/各严重度计数 + Top 3 + 可自动修项，只在结果变化时更新 | **423 字符 / 次**，替代模型自行翻找文件的开销 |
+| **原生工具** | `provemark_guard`（快、默认联网、带缓存）、`provemark_scan`（出报告 / 单维度 / 门禁 / AI 修复指令） | 按需调用，不占常驻上下文 |
+| **安全自动修复** | `autoFix: apply` 只补缺失的 LICENSE / .gitignore 条目 / SECURITY.md / CI 工作流，绝不改业务代码 | 显式调用才执行 |
 
 - 后台扫描：会话首步 + 工具活动后（去抖 + TTL 缓存），默认**联网**查 OSV 漏洞与 deps.dev 许可证、不阻塞；发现**新增**高危/致命时推一条收件箱消息；
 - 判定与 CLI 门禁一致：有 critical/high 即 `blocking`，模型必须修或如实说明，不能宣布通过；
@@ -310,6 +442,47 @@ provemark scan -f sarif    -o result.sarif    # GitHub Code Scanning 原生支�
 
 ---
 
+## 跟踪进度：一个项目，或跨项目
+
+一次扫描回答"现在有多糟"；**进度需要第四个维度——时间**。每次完整扫描都会往本地历史库追加一条记录
+（`~/.cache/provemark/history.jsonl`，`PROVEMARK_HISTORY_FILE` 可覆盖），记录里只有分数、各级别计数、
+依赖数、以及问题指纹/规则/级别/相对路径——**没有源码、没有密钥、没有证据文本**。
+
+```bash
+provemark scan .                 # 这一次扫描自动入账（--no-history 可关闭）
+provemark progress .             # 单个项目的进度
+provemark progress --all         # 本机所有项目
+provemark dashboard -o progress.html   # 单文件 HTML 仪表盘（图表内联，离线可看）
+provemark dashboard --all -o all.html  # 跨项目总览
+```
+
+`provemark progress .` 输出：
+
+```text
+Provemark 进度 · /path/to/repo
+  当前 99/100 A（较首次 +2） · 45 次扫描 · 最近 2026-11-07 15:45
+  未修复 2：致命 0 · 高危 0 · 中危 0 · 低危 1 · 提示 1
+  累计修掉 5 · 复发 0 · 近 7 天：修复 3 / 新增 1
+
+  未修复问题（2）
+    [low     ] SCP-001  pyproject.toml   首次 2026-11-06 10:12
+```
+
+仪表盘里有：跨项目总览表（每个项目一行，含分数、等级、未修复、近 7 天修复/新增、迷你走势）、
+每个项目的**分数时间线**、**未修复问题的堆叠柱状图**、以及"仍未修复"清单（级别/规则/位置/首次出现/是否复发）。
+它是**单文件 HTML**：没有网络请求、没有外部字体/JS，双击就能看，也能当 CI artifact 发出去。
+
+几条设计约束：
+
+- **只有完整扫描会入账**：`--only` / `--skip` / `--staged` 这类局部扫描不写历史，否则时间线会混进
+  "只看 PII" 的分数，把趋势算错；
+- **一分钟内的重复结果会被折叠**（1 小时窗口内完全相同的结果只留一个点），避免定时重扫把曲线刷成一条直线；
+- **历史库有上界**：单项目 400 条、总计 5000 条、400 天，超出后原子重写保留最新；
+- **生命周期是推导出来的**：同一条问题的指纹在后续扫描里消失就是"已修复"，再次出现就是"复发"，
+  不需要额外状态文件，也不会因为文件改名而误判（指纹包含规则、路径与关键证据）。
+
+---
+
 ## 和 AI 一起用
 
 这是 Provemark 和传统扫描器最不一样的地方：**它把问题整理成 AI 能直接执行的指令**。
@@ -453,7 +626,7 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: <你的用户名>/provemark/action@v0.4.0
         with:
           fail-on: high          # 默认值

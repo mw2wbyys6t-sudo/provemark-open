@@ -28,6 +28,7 @@ Thumbs.db
 # 扫描产物
 provemark.sarif
 provemark-report.html
+provemark-progress.html
 report.html
 fix.md
 
