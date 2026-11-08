@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -13,6 +14,7 @@ OSV_VULN = "https://api.osv.dev/v1/vulns/"
 QUERY_TTL = 6 * 3600
 DETAIL_TTL = 30 * 24 * 3600
 MAX_DETAIL_FETCH = 400
+COMMIT_SHA = re.compile(r"[0-9a-f]{40}", re.IGNORECASE)
 SEVERITY_MAP = {
     "CRITICAL": "critical",
     "HIGH": "high",
@@ -128,10 +130,24 @@ def _query_batch(ctx: Context, packages: list[Package]) -> dict[str, list[str]]:
     return results
 
 
+def _is_commit_pinned(package: Package) -> bool:
+    """A GitHub Action pinned to a 40-hex commit SHA.
+
+    Pinning by SHA is the recommended practice and is exactly reproducible, but
+    OSV cannot answer a SHA query (it knows tags/versions, not commits). Such a
+    dependency is *pinned*, not "missing a version" — the lockfile remediation
+    DEP-003 suggests does not apply, so it is reported as a note instead.
+    """
+    if package.ecosystem != "GitHub Actions":
+        return False
+    return bool(COMMIT_SHA.fullmatch(str(package.declared or package.version or "").strip()))
+
+
 def scan(ctx: Context) -> list[Finding]:
     findings: list[Finding] = []
     candidates: list[Package] = []
     unknown: list[Package] = []
+    pinned: list[Package] = []
 
     for package in ctx.deps.packages:
         if not ecosystems.osv_supported(package.ecosystem):
@@ -139,24 +155,47 @@ def scan(ctx: Context) -> list[Finding]:
         if package.locator.startswith(("url:", "file:", "git")):
             continue
         if not package.version:
-            unknown.append(package)
+            if _is_commit_pinned(package):
+                pinned.append(package)
+            else:
+                unknown.append(package)
             continue
         candidates.append(package)
 
-    ctx.unverified_packages = len(unknown)
-    if unknown:
-        sample = "、".join(f"{p.name}" for p in unknown[:8])
+    ctx.unverified_packages = len(unknown) + len(pinned)
+    # Only the default install is the package's own surface. A floating version
+    # inside an optional extra or a dev group is resolved by whoever installs it
+    # (consumer / CI), so it belongs in a note, not in a "generate a lockfile"
+    # finding the package cannot act on.
+    unknown_runtime = [package for package in unknown if package.scope == "runtime"]
+    unknown_optional = [package for package in unknown if package.scope != "runtime"]
+    if unknown_runtime:
+        sample = "、".join(f"{p.name}" for p in unknown_runtime[:8])
         findings.append(
             make_finding(
                 "DEP-003",
                 "dependency",
                 "info",
                 "有依赖无法确定版本，漏洞检查覆盖不到",
-                f"共 {len(unknown)} 个依赖只声明了版本范围（例如 `>=1.2`），没有锁文件就无法知道实际装了什么。"
+                f"共 {len(unknown_runtime)} 个依赖只声明了版本范围（例如 `>=1.2`），没有锁文件就无法知道实际装了什么。"
                 f"示例：{sample}。",
                 remediation="生成并提交锁文件（pip-compile / npm install / cargo generate-lockfile），让版本可复现。",
-                detail={"count": len(unknown)},
+                detail={"count": len(unknown_runtime)},
             )
+        )
+    if unknown_optional:
+        sample = "、".join(f"{p.name}" for p in unknown_optional[:8])
+        ctx.note(
+            f"{len(unknown_optional)} 个 dev / 可选依赖只声明了版本范围（{sample}）："
+            "这类依赖由使用方或 CI 的解析器决定实际版本，本次未做漏洞查询。"
+        )
+    if pinned:
+        sample = "、".join(package.name for package in pinned[:6])
+        suffix = "…" if len(pinned) > 6 else ""
+        ctx.note(
+            f"{len(pinned)} 个 GitHub Action 按 commit SHA 固定（{sample}{suffix}）："
+            "OSV 只接受版本号、无法按 SHA 查询，因此这几个未做漏洞查询；"
+            "SHA 固定本身是可复现的推荐做法，可用 Dependabot 跟踪更新。"
         )
 
     if ctx.offline or not ctx.config.network_enabled:

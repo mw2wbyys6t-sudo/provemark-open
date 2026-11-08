@@ -79,7 +79,7 @@ MANUAL: dict[str, dict[str, str]] = {
     "DEP-003": {
         "title": "依赖版本无法确定",
         "severity": "info",
-        "message": "只声明了版本范围且没有锁文件，无法查询该依赖是否存在已知漏洞。",
+        "message": "只声明了版本范围且没有锁文件，无法查询该依赖是否存在已知漏洞。只统计默认安装的运行时依赖；可选 extra / dev 依赖由使用方解析，只写进注释。",
         "remediation": "生成并提交锁文件。",
     },
     "DEP-004": {
@@ -222,7 +222,7 @@ MANUAL: dict[str, dict[str, str]] = {
     "SCP-001": {
         "title": "依赖没有锁文件",
         "severity": "medium",
-        "message": "安装结果取决于当天上游，无法复现。",
+        "message": "安装结果取决于当天上游，无法复现。库只统计默认安装的运行时依赖：可选 extra 与 dev 依赖由使用方的解析器决定。",
         "remediation": "生成并提交锁文件。",
     },
     "SCP-002": {
