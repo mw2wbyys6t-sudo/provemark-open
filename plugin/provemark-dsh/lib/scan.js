@@ -20,6 +20,25 @@ export const AUTO_FIXABLE_RULES = new Set([
   'HYG-010', // no CI config
 ]);
 
+/**
+ * Collapse one scanner-supplied string into a single printable line.
+ *
+ * Everything a scan returns about a repository — file paths, titles, notes —
+ * is attacker-controlled when the workspace is not trusted: a path may carry
+ * newlines and instruction-looking text. Keeping every such string on one
+ * bounded line is what lets the renderer put it inside an explicit
+ * "untrusted data" boundary instead of letting it forge a new prompt section.
+ */
+export function oneLine(value, max = 220) {
+  const text = String(value ?? '')
+    .replace(/<\/?untrusted-scanned-repo>/gi, '')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 const cache = new Map();
 
 /**
@@ -93,15 +112,15 @@ export function summarizeScan(result, maxFindings) {
     unique.push(finding);
   }
   const top = unique.slice(0, Math.max(1, maxFindings)).map((finding) => ({
-    rule: String(finding.rule_id ?? ''),
-    severity: String(finding.severity ?? ''),
-    title: String(finding.title ?? ''),
-    path: String(finding.path ?? ''),
-    cwe: String(finding.detail?.cwe ?? ''),
-    owasp: String(finding.detail?.owasp ?? ''),
+    rule: oneLine(finding.rule_id, 40),
+    severity: oneLine(finding.severity, 20),
+    title: oneLine(finding.title, 180),
+    path: oneLine(finding.path, 200),
+    cwe: oneLine(finding.detail?.cwe, 40),
+    owasp: oneLine(finding.detail?.owasp, 60),
     line: Number(finding.line ?? 0),
     confidence: Number(finding.confidence ?? 0),
-    remediation: String(finding.remediation ?? ''),
+    remediation: oneLine(finding.remediation, 320),
     fingerprint: String(finding.fingerprint ?? ''),
     autoFixable: AUTO_FIXABLE_RULES.has(String(finding.rule_id ?? '')),
   }));
@@ -115,10 +134,19 @@ export function summarizeScan(result, maxFindings) {
     const fingerprint = String(finding.fingerprint ?? '');
     if (!fingerprint || index.has(fingerprint)) continue;
     index.set(fingerprint, {
-      rule: String(finding.rule_id ?? ''),
-      severity: String(finding.severity ?? ''),
-      path: String(finding.path ?? ''),
+      rule: oneLine(finding.rule_id, 40),
+      severity: oneLine(finding.severity, 20),
+      path: oneLine(finding.path, 200),
     });
+  }
+  // A repository can suppress findings through its own `.provemark.toml` (broad
+  // `[[ignore]]` rules, a severity floor, or a baseline file). That is legitimate
+  // for CI, but a guardrail must not present "suppressed everything" as a clean
+  // verdict without saying so.
+  const suppressed = Array.isArray(result?.suppressed) ? result.suppressed.length : 0;
+  const notes = Array.isArray(result?.stats?.notes) ? result.stats.notes.map((note) => oneLine(note, 300)) : [];
+  if (suppressed > 0) {
+    notes.push(`仓库策略/基线豁免了 ${suppressed} 条问题（未计入分数）：判断"通过"前先确认这些豁免合理，不要把它当成没问题。`);
   }
   return {
     score: typeof score.total === 'number' ? score.total : null,
@@ -134,7 +162,8 @@ export function summarizeScan(result, maxFindings) {
     files: Number(result?.stats?.files_scanned ?? 0),
     packages: Number(result?.stats?.packages_total ?? 0),
     unverified: Number(result?.stats?.packages_unverified ?? 0),
-    notes: Array.isArray(result?.stats?.notes) ? result.stats.notes.map(String) : [],
+    suppressed,
+    notes,
     top,
     autoFixable: [...new Set(autoFixable)],
     fingerprints: new Set(ordered.map((finding) => String(finding.fingerprint ?? '')).filter(Boolean)),
@@ -230,6 +259,25 @@ export function verdictOf(summary) {
 }
 
 /**
+ * The exact argv for one scan, including how it touches the progress ledger.
+ *
+ * A partial scan (`only`) must never become the project's progress point: its
+ * score only covers one dimension, so it is recorded as a no-history scan. A
+ * full scan is tagged with its source so the dashboard can tell plugin-driven
+ * work from explicit CLI runs.
+ */
+export function scanArguments({ root, offline = true, only = '' } = {}) {
+  const args = ['scan', root, '-f', 'json', '--no-color'];
+  if (offline) args.push('--offline');
+  if (only) {
+    args.push('--only', only, '--no-history');
+  } else {
+    args.push('--history-source', 'dsh');
+  }
+  return args;
+}
+
+/**
  * Run one scan. `only` mirrors `scan --only`; an empty string keeps every
  * scanner. Returns a classified summary instead of the raw JSON.
  */
@@ -247,9 +295,7 @@ export async function scan({
   const { root: safeRoot, error } = resolveRoot(root);
   if (safeRoot === null) return { ok: false, error, code: 2 };
 
-  const args = ['scan', safeRoot, '-f', 'json', '--no-color'];
-  if (offline) args.push('--offline');
-  if (only) args.push('--only', only);
+  const args = scanArguments({ root: safeRoot, offline, only });
 
   const startedAt = Date.now();
   const outcome = await runProvemark(args, { timeoutMs, signal });
