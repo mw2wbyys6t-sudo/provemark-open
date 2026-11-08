@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Provemark">
+  <title>Provemark</title>
+  <desc>A chibi blue-haired whale girl (original artwork, the DeepSeek mascot archetype): frilled headband, whale-tail hairpin, big eyes; an emerald seal badge marks the guardrail verdict.</desc>
+  <defs>
+    <linearGradient id="pm-tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#182444"/>
+    </linearGradient>
+    <linearGradient id="pm-gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.09"/>
+      <stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="pm-hair" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#7BA0D4"/>
+      <stop offset="0.5" stop-color="#5A7BAC"/>
+      <stop offset="1" stop-color="#42597F"/>
+    </linearGradient>
+    <linearGradient id="pm-skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFEFE4"/>
+      <stop offset="1" stop-color="#F9DAC7"/>
+    </linearGradient>
+    <linearGradient id="pm-eye" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C4877"/>
+      <stop offset="1" stop-color="#5F93DA"/>
+    </linearGradient>
+    <linearGradient id="pm-seal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34D399"/>
+      <stop offset="0.55" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#pm-tile)"/>
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#pm-gloss)"/>
+  <rect x="15.5" y="15.5" width="481" height="481" rx="98" fill="none" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="3"/>
+
+  <!-- 后发 -->
+  <path d="M256 86 C 352 86 408 150 408 234 C 408 298 392 352 374 392 C 366 404 350 410 338 402 C 352 368 358 336 358 300 L 154 300 C 154 336 160 368 174 402 C 162 410 146 404 138 392 C 120 352 104 298 104 234 C 104 150 160 86 256 86 Z" fill="url(#pm-hair)"/>
+
+  <!-- 脸 -->
+  <ellipse cx="256" cy="264" rx="110" ry="108" fill="url(#pm-skin)"/>
+
+  <!-- 刘海 -->
+  <path d="M148 252 C 150 166 198 126 256 126 C 314 126 362 166 364 252 C 342 216 320 204 302 224 C 290 238 278 244 264 238 C 248 232 238 216 224 226 C 210 236 196 254 182 260 C 170 264 154 262 148 252 Z" fill="url(#pm-hair)"/>
+  <path d="M186 168 C 208 140 240 128 268 132" fill="none" stroke="#A8C4E8" stroke-opacity="0.45" stroke-width="9" stroke-linecap="round"/>
+
+  <!-- 两侧长发 -->
+  <path d="M152 262 C 134 312 132 358 142 412 C 160 398 178 352 184 302 Z" fill="url(#pm-hair)"/>
+  <path d="M360 262 C 378 312 380 358 370 412 C 352 398 334 352 328 302 Z" fill="url(#pm-hair)"/>
+
+  <!-- 白色荷叶边发箍 -->
+  <path d="M146 214 C 174 152 214 124 256 124 C 298 124 338 152 366 214" fill="none" stroke="#F4F8FF" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="152" cy="206" r="14" fill="#FFFFFF"/>
+  <circle cx="172" cy="176" r="14" fill="#FFFFFF"/>
+  <circle cx="198" cy="154" r="14" fill="#FFFFFF"/>
+  <circle cx="226" cy="138" r="14" fill="#FFFFFF"/>
+  <circle cx="256" cy="132" r="14" fill="#FFFFFF"/>
+  <circle cx="286" cy="138" r="14" fill="#FFFFFF"/>
+  <circle cx="314" cy="154" r="14" fill="#FFFFFF"/>
+  <circle cx="340" cy="176" r="14" fill="#FFFFFF"/>
+  <circle cx="360" cy="206" r="14" fill="#FFFFFF"/>
+
+  <!-- 蓝色蝴蝶结 -->
+  <polygon points="356,196 324,174 324,218" fill="#6FA8E8"/>
+  <polygon points="356,196 388,174 388,218" fill="#6FA8E8"/>
+  <circle cx="356" cy="196" r="9" fill="#4E86CC"/>
+
+  <!-- 鲸尾发卡（DeepSeek 大肥鱼） -->
+  <path d="M152 230 C 128 226 108 210 100 188 C 126 186 150 198 164 216 Z" fill="#7DD3FC"/>
+  <path d="M152 230 C 128 234 108 250 100 272 C 126 274 150 262 164 244 Z" fill="#38BDF8"/>
+
+  <!-- 眼睛 -->
+  <ellipse cx="208" cy="294" rx="26" ry="30" fill="url(#pm-eye)"/>
+  <ellipse cx="304" cy="294" rx="26" ry="30" fill="url(#pm-eye)"/>
+  <ellipse cx="208" cy="302" rx="12" ry="15" fill="#14203A"/>
+  <ellipse cx="304" cy="302" rx="12" ry="15" fill="#14203A"/>
+  <circle cx="197" cy="281" r="8" fill="#FFFFFF" fill-opacity="0.92"/>
+  <circle cx="293" cy="281" r="8" fill="#FFFFFF" fill-opacity="0.92"/>
+  <circle cx="217" cy="309" r="4.5" fill="#CFE9FF" fill-opacity="0.75"/>
+  <circle cx="313" cy="309" r="4.5" fill="#CFE9FF" fill-opacity="0.75"/>
+  <path d="M181 284 Q208 262 235 284" fill="none" stroke="#1B2A4A" stroke-width="8" stroke-linecap="round"/>
+  <path d="M279 284 Q306 262 333 284" fill="none" stroke="#1B2A4A" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- 腮红 -->
+  <ellipse cx="176" cy="322" rx="21" ry="11" fill="#F79C93" fill-opacity="0.45"/>
+  <ellipse cx="336" cy="322" rx="21" ry="11" fill="#F79C93" fill-opacity="0.45"/>
+
+  <!-- 嘴 -->
+  <path d="M246 344 Q256 354 266 344" fill="none" stroke="#C4706B" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- 白色小圆领 + 蓝宝石，免得头像像是被裁断 -->
+  <path d="M200 402 Q256 446 312 402 L312 438 Q256 484 200 438 Z" fill="#F7FAFF"/>
+  <circle cx="256" cy="432" r="9" fill="#5B8FD9"/>
+  <path d="M256 424 L262 432 L256 440 L250 432 Z" fill="#CDEBFF"/>
+
+  <!-- 守卫判定：源印徽章 -->
+  <circle cx="404" cy="408" r="50" fill="url(#pm-seal)"/>
+  <circle cx="404" cy="408" r="50" fill="none" stroke="#08111F" stroke-opacity="0.3" stroke-width="5"/>
+  <path d="M381 408 L397 424 L428 386" fill="none" stroke="#071019" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

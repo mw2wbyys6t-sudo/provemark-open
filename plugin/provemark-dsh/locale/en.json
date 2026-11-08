@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Provemark guard",
+    "description": "Always-on repository risk guardrail: scans the workspace for leaked credentials, PII, vulnerable dependencies, license conflicts and common AI-code mistakes, then blocks regressions before work is called done."
+  }
+}

@@ -30,9 +30,34 @@
   没有 Python 时插件不会崩，但**扫描不可用**：状态块会显示「扫描器不可用：未找到 Python 3.11+」并给出修复方式。
 - Windows / macOS / Linux 均可；安装脚本在 Windows 用 junction、其它平台用目录符号链接，`--copy` 适用于只读/跨卷目录。
 
+## 兼容性
+
+| 项 | 声明 | 生效位置 |
+| --- | --- | --- |
+| DSH 宿主版本 | `dsh.engines.dsh: ">=0.2.2-rc.1"`；`dsh.compatibility.dshReleases["0.2.2-rc.1"] = compatible` | 插件管理器在安装/激活前按 `engines.dsh` 校验，不满足直接拦住，而不是装上一半 |
+| 宿主工具 API | `dependencies` / `optionalDependencies` 必须为空；`@deepseek-ai/dsh-tools` 在运行时动态 import | 本包不 vendor 宿主模块，也不需要 `npm install` / `pip install`（扫描器随包分发）；解析不到时退化为「只有提示词守卫、没有工具」，不让宿主起不来 |
+| Node | `engines.node: "^22.19.0 || >=24.0.0"` | 与 DSH 桌面端自带 Node 一致 |
+| 实测环境 | DSH `0.2.2-rc.1` + Node `24.21.0` + Python `3.14.7`（Windows 11） | `doctor` 九项全绿；插件 `selftest` 与仓库 `pytest`（325 项）全过 |
+
 ## 安装
 
 profile 目录默认 `%USERPROFILE%\.dsh\profiles\<profile>`（macOS/Linux: `~/.dsh/profiles/<profile>`）。
+
+### 方式一：用 Harness 自带的插件管理器（生态标准路径）
+
+本包是标准 DSH bundle（`package.json` 的 `dsh.bundle.patch` 指向 `cordis.patch.yml`），
+所以可以直接被 Harness 的 `plugin_manager` 装进当前 profile，不必手工改任何 profile 文件：
+
+```text
+plugin_manager action=install_bundle target=<本包绝对目录>   # 例如 F:\扫描神器\plugin\provemark-dsh
+plugin_manager action=remove_bundle target=provemark-dsh    # 卸载
+# 安装结果是 applied 才算生效；这一步会改 profile 的 package.json / cordis 组合并重启插件行
+```
+
+`install_bundle` 会自己完成「链接进 `<profile>/node_modules` → 写 `dependencies` → 追加 `dsh.profile.bundles`」，
+不写 profile 之外的任何用户文件；审批由 Harness 的权限模型负责。
+
+### 方式二：仓库内安装脚本（CI / 无 UI 环境）
 
 ```pwsh
 node .\plugin\provemark-dsh\scripts\install.mjs            # 默认 desktop，或唯一的 profile
@@ -106,12 +131,21 @@ node scripts\release.mjs --version 0.5.0 --repack    # 只重打当前版本的 
 | --- | --- |
 | `provemark_guard` | 快速体检：`verdict` + 分数 + Top N（`文件:行` + 修法 + fingerprint）+ `autoFixable`。参数 `path` / `only` / `autoFix` / `offline` / `maxFindings` / `fresh` |
 | `provemark_scan` | 出报告（`html`/`markdown`/`sarif`/`json`）、只跑一个维度、`--sbom` 对齐、`--fail-on` 门禁、`--ai-prompt` 生成修复指令 |
+| `provemark_progress` | 读本地扫描历史：单项目的分数时间线 / 已修复 / 仍打开 / 复发，或 `all=true` 跨项目汇总；`action="dashboard"` 在工作区内生成单文件 HTML 仪表盘（图表内联、不联网） |
+
+**进度账本**：每次**完整**扫描都会往 `~/.cache/provemark/history.jsonl` 追加一条记录
+（分数、各级别计数、文件/依赖数、问题指纹与相对路径；不含源码和证据文本）。局部扫描
+（`only` / `skip`）刻意**不**入账，否则时间线会混进"只看 PII"的分数。插件调用扫描时会带
+`--history-source dsh` 标记来源，CLI 手工扫描标记为 `cli`。
 
 技能里的 `<PM>` 命令行入口仍然可用（CI、脚本、没有工具时）：
 
 ```pwsh
 node "<PM>\bin\provemark.mjs" scan . --offline
 node "<PM>\bin\provemark.mjs" scan . --ai-prompt fix.md --test-command "pytest -q"
+node "<PM>\bin\provemark.mjs" progress .          # 单项目进度
+node "<PM>\bin\provemark.mjs" progress --all      # 跨项目
+node "<PM>\bin\provemark.mjs" dashboard -o progress.html
 ```
 
 ## 配置
@@ -147,8 +181,10 @@ node "<PM>\bin\provemark.mjs" scan . --ai-prompt fix.md --test-command "pytest -
 
 ```text
 provemark-dsh/
-├── package.json            # main → lib/index.js；dsh.bundle.patch → cordis.patch.yml
+├── package.json            # main → lib/index.js；dsh.bundle.patch → cordis.patch.yml；icon → icon.svg
 ├── cordis.patch.yml        # 两行：provemark-guard（本插件）+ provemark-skill-filesystem
+├── icon.svg                # 插件图标（Plugin Manager 读，不激活也能显示）
+├── locale/{en,zh}.json     # meta.title / meta.description，中英各一份
 ├── lib/
 │   ├── index.js            # apply(ctx, config)：提示词段 / 动态上下文 / 两个工具 / 后台扫描
 │   ├── python.js           # Python 发现 + 一次性运行扫描器（bin 复用同一份）
@@ -181,7 +217,26 @@ node plugin\provemark-dsh\scripts\sync-vendor.mjs --check  # 漂移检查（漂�
 - 缓存：漏洞查询 6 小时、公告 30 天、许可证 7 天（`~/.cache/provemark`），重复扫描不会重复打网络；
   命中缓存时结论里会注明「来自本地缓存，本次未联网校验」，不会冒充刚刚联网校验的结果；
 - `autoFix: apply` 是唯一会写文件的行为，且只新增缺失文件；不覆盖已存在文件、不改业务代码；
+  且拒绝通过符号链接写入（`fix --apply` 会跳过指向仓库外的链接目标/父目录）；
+- **扫描结果是不可信数据**：扫描对象可能是别人给的仓库，所以文件路径、标题、说明进入模型上下文前都会
+  压平成单行并包进 `<untrusted-scanned-repo>` 边界，伪造的边界标签会被剥掉——仓库不能靠文件名伪造一段系统提示；
+  工具输出、动态状态块、收件箱通知、`provemark_scan` 回执都走同一条渲染路径；
+- **写盘范围受限**：`provemark_scan` 的 `output` / `aiPrompt` 只允许落在会话工作区或系统临时目录内
+  （相对路径必须留在工作区内，符号链接会被解析后重新校验）；扫描根目录不是写盘锚点，
+  所以「把某个目录当 path 扫一遍」不会变成往那里写文件的能力；
+- **仓库策略豁免不再隐形**：仓库自己的 `.provemark.toml` 用 `[[ignore]]`/基线把问题压掉时，
+  守卫会在结论里写明「豁免了 N 条问题（未计入分数）」，不会把"策略压干净"当成"没问题"；
 - `install.mjs` 会改 profile 的 `package.json`（留备份）。撤销：`node scripts/uninstall.mjs`。
+
+## 图标与本地化
+
+| 资源 | 用途 |
+| --- | --- |
+| `icon.svg` | 插件图标（512×512，原创）：深墨色圆角瓦片 + 一枚略微倾斜的「印花」印章，印章里是刻出来的对勾——「印」对应源印，对勾对应守卫判定。另有 Q 版「大肥鱼」人物方案留在 `docs/assets/icon-alt-mascot.svg`（同样原创）：想换回去时把它复制到本包根目录，再把 `package.json` 的 `icon` 指向该文件名即可（图标必须在包内） |
+| `locale/en.json`、`locale/zh.json` | `meta.title` / `meta.description`：插件列表里显示的名字与一句话能力说明，中英各一份，`exports` 里导出 `./locale/*.json` |
+
+`scripts/validate.mjs` 会校验：图标存在、≤256 KiB、是合法 SVG 根元素、不含脚本/远程引用、`files[]` 真正打包；
+本地化文件齐备且 `meta.title`/`meta.description` 非空——这些都是"装了却显示空白"的典型原因。
 
 ## 许可
 
