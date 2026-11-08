@@ -5,6 +5,16 @@
 
 ## [未发布]
 
+### 新增（PR 对比评论机器人）
+- `provemark diff <base.json> <head.json>`：按指纹比对两份 JSON 报告，输出文本 / JSON /
+  Markdown。Markdown 首行带 `<!-- provemark-diff -->` 标记，工作流据此**就地更新**同一条评论，
+  而不是每推一次新开一条；`--fail-on-regression` 在新增高危/致命时返回 1。
+- `.github/workflows/pr-guard.yml`：PR 触发，基线检出到 `base-tree/` 两侧各扫一次，用 `gh`
+  直接发评论（不引入第三方 action，也就没有 SHA 固定问题）。fork PR 无写权限时降级为打进
+  job 日志与 Summary，不报错。仅展示、不设门禁。
+- `tests/test_diff.py`：14 项（指纹分类、挪行算"一修一增"、缺指纹回退、表格转义、条数截断、
+  仓库级无行号、CLI 退出码）。测试 399 → 413。
+
 ### 新增（端到端演示仓库 + 双语 README）
 - `demo/orderdesk/`：48 个文件的三栈演示仓库（Python API / React 面板 / Go 网关），
   刻意写入 SQL 拼接、硬编码密钥、`.env` 入库、过期依赖等，用于在 README 里展示插件的真实效果。

@@ -822,6 +822,38 @@ Action 的 manifest 有测试守着（`tests/test_action.py` 校验 composite �
 
 > 门禁默认值已按 `fail_on=high` + `min_confidence=0.5` 固化到 CLI、策略模板、`init` 生成的工作流和 Action 四处。
 
+### 🤖 PR 对比：每次改动贴一条会自己更新的评论
+
+一次扫描回答「现在有多糟」，PR 需要的是另一个问题：**这次改动做了什么**。`provemark diff` 拿两份 JSON 报告按指纹比对，输出可直接贴进 PR 的 Markdown：
+
+```bash
+provemark scan .        -f json -o head.json
+provemark scan base/    -f json -o base.json
+
+provemark diff base.json head.json -f markdown -o comment.md \
+  --label-base main --label-head feat/orders
+```
+
+```text
+<!-- provemark-diff -->
+## 🛡️ Provemark 对比
+
+分数 **73/100 C**（+73） — `main` → `feat/orders`
+
+| 级别 | main | feat/orders | 变化 |
+| 致命 | 5 | 0 | -5 |
+| 高危 | 24 | 3 | -21 |
+...
+**新增 5 · 修掉 40 · 未变 8**
+```
+
+本仓库的 [`.github/workflows/pr-guard.yml`](.github/workflows/pr-guard.yml) 就是这么用的：检出基线到 `base-tree/`，两侧各扫一次，然后**就地更新**同一条评论（靠首行的 `<!-- provemark-diff -->` 标记定位），避免每推一次就多一坨噪音。它只做展示、不设门禁——门禁仍在 `scan --fail-on high` 那边。
+
+- `--fail-on-regression`：新增了高危/致命时返回退出码 1，想直接卡住 PR 就加它；
+- fork 来的 PR 拿不到写权限，工作流会把对比打到 job 日志和 Summary 里，不报错；
+- 两侧用同一个 `provemark` 版本扫描（先装当前分支），否则基线会拿旧规则去扫新代码；
+- 标签用**短 SHA** 而不是分支名：分支名由 PR 作者决定，属于不可信输入，工作流不把它送进 shell（这条也是 `VUL-017` 教出来的）。
+
 本仓库自己的 CI 额外有一个**多生态解析矩阵**：一个 job 扫描 `tests/fixtures/ecosystems/` 得到生态列表，另一个 job 按矩阵并行跑，每个生态一条独立流水线。因此某个生态的解析退化时，报错会直接定位到具体语言（`parse · jvm`），而不是笼统的「测试挂了」。
 
 ```yaml

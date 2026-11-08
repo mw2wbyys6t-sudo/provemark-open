@@ -1,0 +1,98 @@
+name: pr-guard
+
+# 每个 PR 跑一遍「基线 vs 本次」，把对比贴成一条评论，并在后续推送时就地更新。
+# 只做信息展示，不设门禁 —— 门禁在 provemark.yml 里（scan --fail-on high）。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install .
+
+      # 先扫当前分支，再把基线检出到子目录 —— 反过来的话，head 扫描会把基线树也算进去。
+      - name: Scan PR head
+        run: |
+          set -euo pipefail
+          provemark scan . --fail-on none --no-history \
+            -f json -o "$RUNNER_TEMP/head.json" --quiet || true
+
+      - name: Checkout base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base-tree
+
+      - name: Scan base
+        run: |
+          set -euo pipefail
+          provemark scan base-tree --fail-on none --no-history \
+            -f json -o "$RUNNER_TEMP/base.json" --quiet || true
+
+      - name: Build comparison
+        run: |
+          set -euo pipefail
+          if [ ! -f "$RUNNER_TEMP/base.json" ] || [ ! -f "$RUNNER_TEMP/head.json" ]; then
+            echo "::warning::有一侧没生成报告，跳过对比"
+            exit 0
+          fi
+          # 标签只用短 SHA：分支名来自 PR 作者，是不可信输入，不往 shell 里送。
+          base_label=$(git -C base-tree rev-parse --short HEAD)
+          head_label=$(git rev-parse --short HEAD)
+          provemark diff "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json" \
+            -f markdown -o comment.md \
+            --label-base "$base_label" --label-head "$head_label"
+
+      - name: Publish comment
+        # fork PR 的 token 是只读的，发不了评论；这时候只把对比打进 job 日志。
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          set -euo pipefail
+          if [ ! -f comment.md ]; then
+            echo "没有对比文件，跳过"
+            exit 0
+          fi
+          if [ "$SAME_REPO" != "true" ]; then
+            echo "来自 fork 的 PR，只把对比打到日志里："
+            cat comment.md
+            exit 0
+          fi
+          # 同一条评论就地更新，避免每推一次就多一坨噪音。
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            -q '.[] | select(.body != null) | select(.body | startswith("<!-- provemark-diff -->")) | .id' \
+            | head -n1 || true)
+          if [ -n "${existing:-}" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@comment.md >/dev/null
+            echo "已更新评论 $existing"
+          else
+            gh pr comment "$PR" --body-file comment.md >/dev/null
+            echo "已新增评论"
+          fi
+
+      - name: Job summary
+        if: always()
+        run: |
+          if [ -f comment.md ]; then cat comment.md >> "$GITHUB_STEP_SUMMARY"; fi

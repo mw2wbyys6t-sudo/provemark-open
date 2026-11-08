@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, ai_usage, fossa_deps, history, notices, vendored
+from . import diff as diff_report
 from .config import DEFAULT_CONFIG_TEMPLATE, ConfigError, find_config_file, load_config
 from .engine import gate_failed, run_scan
 from .fixers import FIX_TARGETS, apply_action, install_hook, plan, uninstall_hook
@@ -87,6 +88,26 @@ def build_parser() -> argparse.ArgumentParser:
     board.add_argument("--days", type=int, default=0, help="只看最近 N 天（默认全部）")
     board.add_argument("--print", dest="print_only", action="store_true", help="输出到 stdout，不写文件")
     board.add_argument("--history-file", metavar="FILE", help="覆盖历史库路径")
+
+    diff = sub.add_parser("diff", help="对比两份 JSON 报告（用于 PR 评论）")
+    diff.add_argument("base", help="基线报告（如 base.json）")
+    diff.add_argument("head", help="本次报告（如 head.json）")
+    diff.add_argument(
+        "-f",
+        "--format",
+        default="markdown",
+        choices=("markdown", "text", "json"),
+        help="输出格式（默认 markdown，可直接贴进 PR 评论）",
+    )
+    diff.add_argument("-o", "--output", help="写入文件；不给则打印到终端")
+    diff.add_argument("--label-base", default="", help="基线侧显示名（默认 base）")
+    diff.add_argument("--label-head", default="", help="本次侧显示名（默认 head）")
+    diff.add_argument("--max-items", type=int, default=8, metavar="N", help="每类最多列出 N 条（默认 8）")
+    diff.add_argument(
+        "--fail-on-regression",
+        action="store_true",
+        help="新增了高危/致命问题时返回退出码 1",
+    )
 
     init = sub.add_parser("init", help="初始化策略文件与 CI（只创建缺失文件）")
     init.add_argument("path", nargs="?", default=".")
@@ -778,6 +799,33 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_diff(args: argparse.Namespace) -> int:
+    try:
+        base = diff_report.load_report(args.base)
+        head = diff_report.load_report(args.head)
+    except diff_report.DiffError as exc:
+        print(f"provemark diff：{exc}", file=sys.stderr)
+        return 2
+    result = diff_report.compare(
+        base,
+        head,
+        base_label=args.label_base or "base",
+        head_label=args.label_head or "head",
+    )
+    text = diff_report.render(result, args.format, max_items=max(0, args.max_items))
+    if args.output:
+        target = Path(args.output).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text + "\n", encoding="utf-8")
+        print(f"对比已写入 {target}")
+    else:
+        print(text)
+    if args.fail_on_regression and result.regressed:
+        print("新增了高危/致命问题：--fail-on-regression 要求返回退出码 1。", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -798,6 +846,7 @@ def main(argv: list[str] | None = None) -> int:
         "vendored": cmd_vendored,
         "progress": cmd_progress,
         "dashboard": cmd_dashboard,
+        "diff": cmd_diff,
     }
     handler = handlers.get(args.command)
     if handler is None:
