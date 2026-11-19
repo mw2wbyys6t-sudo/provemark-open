@@ -6,7 +6,8 @@
 | --- | --- | --- |
 | 编码红线 | 系统提示词段 `provemark:guardrails`（静态） | 每一步都在，引导模型**写的时候**就避开问题 |
 | 工作区状态 | 动态上下文块 `provemark:workspace-state` | 只在扫描结果变化时更新，避免每步刷 token |
-| 原生工具 | `provemark_guard` / `provemark_scan` | 模型主动调用，或按提示词要求调用 |
+| 原生工具 | `provemark_guard` / `provemark_scan` / `provemark_progress` | 模型主动调用，或按提示词要求调用 |
+| 可配置能力 | `Config`（插件页表单，18 个字段） | 改间隔/超时/自动修复档位等，不用手改 patch 文件 |
 | 后台扫描 | 会话首步 + 工具活动后（去抖 + 缓存） | 自动，不阻塞当前步骤 |
 
 ## 工具

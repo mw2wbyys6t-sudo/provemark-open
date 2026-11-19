@@ -179,6 +179,32 @@ for (const module of ['config.js', 'format.js', 'python.js', 'scan.js']) {
   check(existsSync(join(ROOT, 'lib', module)), `lib/${module} is missing`);
 }
 
+// -------------------------------------------------- capability config surface
+// The plugin page renders the capability's knobs from `Config`. Two failures are
+// possible and both are silent at runtime: no schema at all (config becomes
+// patch-only again) and a schema that drifted from what apply() actually reads
+// (the panel shows a field that does nothing, or hides one that matters).
+const schemaFile = join(ROOT, 'lib', 'config-schema.js');
+check(existsSync(schemaFile), 'lib/config-schema.js is missing: the capability would have no config surface');
+if (existsSync(entry) && existsSync(schemaFile)) {
+  const entryText = readFileSync(entry, 'utf8');
+  const schemaText = readFileSync(schemaFile, 'utf8');
+  check(/export \{ Config \}/.test(entryText), 'lib/index.js must re-export Config for the Host');
+  check(!/from ['"]@deepseek-ai\//.test(schemaText), 'lib/config-schema.js must not statically import schemastery either');
+  const defaultsText = readFileSync(join(ROOT, 'lib', 'config.js'), 'utf8');
+  const defaultsBlock = /export const DEFAULTS = \{([\s\S]*?)\n\};/.exec(defaultsText)?.[1] ?? '';
+  const keys = [...defaultsBlock.matchAll(/^\s{2}([A-Za-z][A-Za-z0-9]*):/gm)].map((match) => match[1]);
+  check(keys.length > 0, 'lib/config.js DEFAULTS could not be parsed for the schema parity check');
+  for (const key of keys) {
+    check(new RegExp(`\\b${key}:`).test(schemaText), `lib/config-schema.js must declare "${key}" (lib/config.js DEFAULTS has it)`);
+  }
+  const declared = [...schemaText.matchAll(/^\s{4}([A-Za-z][A-Za-z0-9]*):/gm)].map((match) => match[1]);
+  for (const key of declared) {
+    check(keys.includes(key), `lib/config-schema.js declares "${key}" but lib/config.js DEFAULTS has no such knob`);
+  }
+  notes.push(`config schema: ${keys.length} fields in step with DEFAULTS`);
+}
+
 // ------------------------------------------------------------------ SKILL.md
 const skillFile = join(ROOT, 'skills', 'provemark', 'SKILL.md');
 if (!existsSync(skillFile)) {

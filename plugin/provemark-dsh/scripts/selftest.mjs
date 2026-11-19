@@ -53,9 +53,36 @@ process.env.PROVEMARK_DSH_BASELINE_FILE = baselineFile;
 // history that the dashboard shows the user.
 const historyFile = join(scratch, 'history.jsonl');
 process.env.PROVEMARK_HISTORY_FILE = historyFile;
+// The config surface needs the Host's schemastery. Point the resolver at the
+// profile's copy when it exists, so the self-test exercises the real schema
+// instead of only the "degrade to patch-only config" path.
+const profileDir = process.env.DSH_PROFILE_DIR || '';
+const profileSchemastery = profileDir
+  ? join(profileDir, 'node_modules', '@deepseek-ai', 'schemastery', 'lib', 'index.mjs')
+  : '';
+const hasProfileSchemastery = profileSchemastery && existsSync(profileSchemastery);
+if (hasProfileSchemastery) process.env.PROVEMARK_DSH_SCHEMASTERY_MODULE = profileSchemastery;
 writeFileSync(join(scratch, 'fake-tools.mjs'), 'export const defineTool = (definition) => definition;\n', 'utf8');
 
-const { apply } = await import(pathToFileURL(join(PACKAGE_ROOT, 'lib', 'index.js')).href);
+const { apply, Config } = await import(pathToFileURL(join(PACKAGE_ROOT, 'lib', 'index.js')).href);
+
+// ------------------------------------------------- capability config surface
+// A "tool & capability" plugin must expose its knobs to the plugin page; the
+// schema is loaded dynamically because this package ships no dependencies.
+{
+  check(Config === undefined || typeof Config === 'function', 'Config is a schema or absent, never a broken value');
+  if (hasProfileSchemastery) {
+    check(typeof Config === 'function', 'the config schema loads when schemastery is reachable');
+    const fields = Config && Config.dict ? Object.keys(Config.dict) : [];
+    check(fields.length >= 18, `the config schema declares the capability knobs (got ${fields.length})`);
+    const parsed = typeof Config === 'function' ? Config({ autoScan: false }) : null;
+    check(Boolean(parsed) && parsed.autoScan === false, 'the schema keeps an explicit boolean value');
+    check(Boolean(parsed) && parsed.offline === false && parsed.maxFindings === 5, 'the schema fills the documented defaults');
+    check(Boolean(parsed) && ['off', 'preview', 'apply'].includes(parsed.autoFix), 'autoFix resolves to a legal mode');
+  } else {
+    check(Config === undefined, 'without schemastery the capability degrades to patch-only config');
+  }
+}
 
 // ------------------------------------------------------------ mock cordis ctx
 const registered = { sections: [], contexts: [], tools: [], listeners: new Map() };

@@ -26,7 +26,8 @@
 | **编码红线** | 系统提示词段 `provemark:guardrails` | 每一步都在，模型写代码时就避开幻觉依赖、硬编码密钥、`except: pass`、危险调用、**注入/认证/加密/SSRF/XXE/容器配置**、PII、许可证与供应链坑 |
 | **代码安全** | `VUL-001` ~ `VUL-018`（每条带 CWE + OWASP 映射） | SQL/命令/模板注入、反序列化、XSS、路径穿越、SSRF、弱哈希/随机/加密、关闭 TLS 校验、JWT 校验关闭、XXE、C 危险函数、Actions 脚本注入、容器提权；配套 `references/security-playbook.md` 讲判定顺序与修法 |
 | **工作区状态** | 动态上下文块 `provemark:workspace-state` | 只在扫描结果变化时更新（不刷 token）：分数/等级/各严重度计数 + Top 3 + 可自动修项；**改动后首行出现「⚠️ 结论可能已过期」** |
-| **原生工具** | `provemark_guard`（快、默认联网、带缓存）、`provemark_scan`（出报告/单维度/门禁） | 模型按提示词要求主动调用，不需要 shell |
+| **原生工具** | `provemark_guard`（快、默认联网、带缓存）、`provemark_scan`（出报告/单维度/门禁）、`provemark_progress`（历史账本/跨项目/仪表盘） | 模型按提示词要求主动调用，不需要 shell |
+| **可配置能力** | `export const Config`（18 个字段：扫描开关、间隔、超时、自动修复档位、注入阈值…） | 插件页直接调参并校验；不依赖手改 profile 的 `cordis.patch.yml` |
 | **后台扫描** | 会话首步 + 工具活动后（8s 去抖、最短 30s 一次） | 自动，不阻塞当前步骤；发现**新增**高危/致命时推一条收件箱消息 |
 | **全程跟踪** | 会话账本（自动扫描次数 / 累计拦下的高危次数） | 模型能知道自己这一路守过什么，过期结论不会被当成最新结论 |
 | **防退化棘轮** | 首次扫描冻结基线，之后每次扫描比较新增/修掉 | `trend` 一句话说明"比进来时变好还是变差"；新增 critical/high 直接 `blocking`，防止 AI 越改越糟；老项目基线差是允许的，只要求不比进来时更差 |
@@ -34,6 +35,17 @@
 | **技能** | `provemark` skill | 深度工作流 + **11 本领域手册**（安全/全栈/算法/架构/测试/数据/交付/调试/评审/AI 协作/维护纪律）按需加载 |
 
 判定口径与 CLI 门禁一致：**有 critical 或 high 即 `blocking`**。不会替模型"宣布通过"——`blocking` 必须修或如实说明。
+
+### 能力矩阵（工具契约）
+
+| 能力 | 参数（全部可选，除注明） | 返回 | 副作用 | 幂等 | 失败语义 |
+| --- | --- | --- | --- | --- | --- |
+| `provemark_guard` | `path` · `only` · `autoFix` · `offline` · `maxFindings` · `fresh` · `resetBaseline` | `verdict`/`score`/`grade`/`counts`/`findings[]`（含 CWE·OWASP）/`autoFixable`/`trend` | 只读扫描；`autoFix: apply` 时仅**新增**缺失文件 | 是：缓存键 = `root + 扫描范围`；apply 不覆盖已有文件 | `verdict: error` + `message`（超时 / 无 Python / 路径非法），**不会**返回"通过" |
+| `provemark_scan` | `path` · `format` · `output` · `only` · `skip` · `offline` · `failOn` · `aiPrompt` · `sbom` · `verbose` | `root`/`reportPath`/`exitCode`/`verdict`/`message` | 写报告 / 修复指令；路径必须落在工作区或系统临时目录内 | 是：同一路径重跑覆盖，不追加 | `exitCode ≠ 0` + 原因；门禁命中是 `blocking`，不是 `error` |
+| `provemark_progress` | `action`（summary/dashboard）· `path` · `all` · `days` · `output` | `action`/`score`/`open`/`fixed`/`reopened`/`reportPath`/`data` | `dashboard` 写单文件 HTML（同样的路径限制） | 是：覆盖同一路径 | `error` 字段 + `message`（无历史 / 超时 / 路径越界） |
+| 上下文块 | —（每步自动注入） | 分数 / 计数 / Top 3 / 趋势 / 健康状态 | 无（只读） | — | 缺 Python、扫描器缺失、工具未注册都在块里直说，不静默 |
+| `Config` | 插件页表单（18 字段，宿主按 JSON Schema 校验） | 校验通过的 config | 改配置会重启插件行（字段非 volatile） | 是 | 非法值由宿主拦下并保留原配置 |
+
 
 ## 前置条件
 
@@ -107,7 +119,7 @@ node scripts\doctor.mjs --json # CI 或脚本消费
 
 ```pwsh
 node scripts\validate.mjs     # 静态检查：清单 / 两行 patch / SKILL.md / 随包源码
-node scripts\selftest.mjs     # 无宿主的端到端自检：模拟 ctx，跑真实扫描、两个工具、缓存、事件钩子
+node scripts\selftest.mjs     # 无宿主的端到端自检：模拟 ctx，跑真实扫描、三个工具、进度账本、缓存、事件钩子
 node scripts\install.mjs --check   # 安装状态 + 运行中宿主是否真的加载过本插件
 node bin\provemark.mjs --pm-info   # 用了哪个 Python、扫描器在不在
 ```
@@ -170,7 +182,14 @@ node "<PM>\bin\provemark.mjs" dashboard -o progress.html
 
 ## 配置
 
-在 profile 的 `cordis.patch.yml` 里按 id 覆盖（不要改本包里的文件，升级会覆盖）：
+**方式一（推荐）：插件页直接调。** 本包导出了 `Config`（`lib/config-schema.js`，18 个字段），
+宿主会在激活前用这个 schema 校验行配置，插件页据此渲染表单——改完会重启插件行（字段不是 volatile，
+因为 `apply()` 一次性读入设置并据此建缓存）。schema 是**动态加载** schemastery 的：本包零依赖、
+通常是 `link:` 安装（没有自己的 `node_modules`），所以按「bare specifier → Electron resources 的
+app.asar → app.asar.unpacked」顺序解析；全都拿不到时 `Config` 为 `undefined`，插件照常工作，
+配置退回方式二（`doctor` 的 `config schema` 一行会显示 `absent`）。
+
+**方式二：在 profile 的 `cordis.patch.yml` 里按 id 覆盖**（不要改本包里的文件，升级会覆盖）：
 
 ```yaml
 - id: provemark-guard
@@ -206,7 +225,8 @@ provemark-dsh/
 ├── icon.svg                # 插件图标（Plugin Manager 读，不激活也能显示）
 ├── locale/{en,zh}.json     # meta.title / meta.description，中英各一份
 ├── lib/
-│   ├── index.js            # apply(ctx, config)：提示词段 / 动态上下文 / 两个工具 / 后台扫描
+│   ├── index.js            # apply(ctx, config)：提示词段 / 动态上下文 / 三个工具 / 后台扫描
+│   ├── config-schema.js    # export const Config：插件页可调的能力参数（schemastery，动态加载）
 │   ├── python.js           # Python 发现 + 一次性运行扫描器（bin 复用同一份）
 │   ├── scan.js             # 扫描、分类、缓存、安全修复
 │   ├── format.js           # 编码红线 + 状态块 + 工具渲染

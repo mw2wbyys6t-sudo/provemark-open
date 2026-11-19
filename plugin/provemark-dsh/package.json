@@ -1,7 +1,7 @@
 {
   "name": "provemark-dsh",
-  "version": "0.7.1",
-  "description": "DeepSeek Harness skill bundle for Provemark（源印）— local, zero-dependency originality & risk scanning: license combination conflicts, vulnerable dependencies, leaked credentials, PII, AI-code risks, supply chain and repo hygiene.",
+  "version": "0.8.0",
+  "description": "DeepSeek Harness tool & capability bundle for Provemark（源印）— always-on local risk scanning: 3 native tools (provemark_guard / provemark_scan / provemark_progress), a guardrail prompt section, and a skill. Covers license combination conflicts, vulnerable dependencies, leaked credentials, PII, AI-code risks, supply chain and repo hygiene.",
   "license": "Apache-2.0",
   "author": "Provemark Contributors",
   "type": "module",
@@ -50,7 +50,9 @@
   ],
   "keywords": [
     "dsh-plugin",
+    "dsh-tools",
     "deepseek-harness",
+    "capability",
     "agent-skill",
     "provemark",
     "security",

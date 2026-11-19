@@ -1,22 +1,26 @@
 /**
  * provemark-dsh — always-on repository guardrail for DeepSeek Harness.
  *
- * Three contributions, weakest mechanism that suffices:
+ * Contributions, weakest mechanism that suffices:
  *  1. a static system-prompt section with the rules the scanner enforces
  *     (so the model writes safer code instead of being corrected afterwards);
  *  2. a dynamic per-agent context block carrying the last scan of this
  *     workspace, refreshed by background scans after tool activity;
- *  3. two native tools — `provemark_guard` (fast, offline) and
- *     `provemark_scan` (reports / specific scanners / CI-gate parity).
+ *  3. three native tools — `provemark_guard` (fast, default-online, cached),
+ *     `provemark_scan` (reports / specific scanners / CI-gate parity) and
+ *     `provemark_progress` (history ledger, cross-project roll-up, dashboard);
+ *  4. a declarative `Config` schema (lib/config-schema.js) so the capability is
+ *     tunable from the plugin page instead of only via the profile patch.
  *
  * Every registration is optional and wrapped: a missing service, a missing
- * Python, or a host API that moved must degrade to "no guardrail", never to a
- * failed boot.
+ * Python, a missing schemastery, or a host API that moved must degrade to
+ * "no guardrail", never to a failed boot.
  */
 import { writeFileSync, mkdirSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { Config, CONFIG_SCHEMA_STATUS } from './config-schema.js';
 import {
   resolveRoot,
   scan,
@@ -37,7 +41,11 @@ import { GUARDRAILS, SECTION_NAME, CONTEXT_NAME, stateText, toolText, progressTe
 import { runProvemark, parseScanJson } from './python.js';
 
 export const name = 'provemark-guard';
-export const VERSION = '0.7.1';
+export const VERSION = '0.8.0';
+// Re-exported for the Host: the plugin page reads this schema to render the
+// capability's configuration. Undefined when schemastery is unreachable, which
+// the Host treats the same as "no schema" (config stays patch-only).
+export { Config };
 
 const MAX_SESSIONS = 64;
 
@@ -51,6 +59,11 @@ export function apply(ctx, rawConfig) {
     scans: 0,
     lastScan: null,
   };
+  // Whether the capability's config surface is live is part of "is this plugin
+  // actually usable", so it is recorded next to the tool-registration stage.
+  diag.stages.configSchema = CONFIG_SCHEMA_STATUS.available
+    ? `ok: ${CONFIG_SCHEMA_STATUS.source}`
+    : `absent: ${CONFIG_SCHEMA_STATUS.failures.join(' | ')}`;
   // Diagnostics live in a per-host directory with owner-only permissions: a
   // world-writable temp file that the plugin rewrites on every load is a
   // symlink/truncation target on multi-user machines.

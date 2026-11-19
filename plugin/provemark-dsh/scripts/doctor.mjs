@@ -91,6 +91,14 @@ if (loaded) {
   );
   const stages = loaded.diag?.stages ?? {};
   push('tools registered', /^ok:/.test(String(stages.toolsRegistration ?? '')), String(stages.toolsRegistration ?? 'unknown'), 'check diag.warnings in the marker; the host may not resolve @deepseek-ai/dsh-tools');
+  // The capability's knobs are only visible in the plugin page when the Host can
+  // read a Config schema; without it everything still works, but patch-only.
+  push(
+    'config schema',
+    /^ok:/.test(String(stages.configSchema ?? '')),
+    String(stages.configSchema ?? 'unknown'),
+    'the plugin page cannot render the capability knobs; config falls back to cordis.patch.yml (check the schemastery resolution path)',
+  );
 }
 
 // 3) Python + vendored scanner

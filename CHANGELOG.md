@@ -5,6 +5,33 @@
 
 ## [未发布]
 
+## [0.8.0] - 2026-11-19
+
+### 新增（能力可配置：`export const Config`）
+
+插件定位是「工具与能力」，但能力参数此前只能手改 profile 的 `cordis.patch.yml`——插件页拿不到 schema，
+实测 Config 状态是 `absent`。这一轮把能力面补齐：
+
+- 新增 `lib/config-schema.js`：18 个字段（开关、后台扫描间隔、缓存、超时、自动修复档位、注入阈值、
+  日志前缀…）与 `lib/config.js` 的 DEFAULTS 一一对应；宿主激活前按它校验行配置，插件页据此渲染表单。
+- **零依赖承诺不破**：schema 不静态 import schemastery，而是按「bare specifier → Electron resources
+  的 app.asar → app.asar.unpacked」顺序动态解析；全都拿不到时 `Config` 为 `undefined`，插件照常工作，
+  配置退回 patch 文件。字段**不是 volatile**：`apply()` 一次性读入设置并据此建缓存，改配置必须重启插件行，
+  面板不能假装"已生效"。
+- 诊断可见：激活标记新增 `diag.stages.configSchema`（`ok: <来源>` / `absent: <候选失败原因>`），
+  `doctor` 新增一行 `config schema`。
+- `validate.mjs` 新增双向对账：DEFAULTS 的每个键必须在 schema 里声明，schema 里也不能出现 DEFAULTS 没有的键。
+- `selftest` 新增 6 条断言：schema 可加载（命中 profile 的 schemastery 时）、字段数 ≥18、显式布尔值保留、
+  默认值填充、`autoFix` 只解析出合法档位、无 schemastery 时静默降级。
+
+### 修正（定位表述与文档）
+
+- `package.json` 的 `description` 从「skill bundle」改为「tool & capability bundle」（三个原生工具 + 守卫上下文 + 技能），
+  `keywords` 补 `dsh-tools` / `capability`。
+- README 新增「能力矩阵（工具契约）」：每个能力的参数、返回、副作用、幂等性、失败语义一张表说清；
+  「配置」章节改为「插件页优先 / patch 文件兜底」双路径；修掉过期的「两个工具」计数。
+- 插件版本 `0.7.1 → 0.8.0`（新增对外能力面：可配置 schema）。
+
 ### 新增（PR 对比评论机器人）
 - `provemark diff <base.json> <head.json>`：按指纹比对两份 JSON 报告，输出文本 / JSON /
   Markdown。Markdown 首行带 `<!-- provemark-diff -->` 标记，工作流据此**就地更新**同一条评论，
