@@ -218,3 +218,16 @@ node "<PM>\bin\provemark.mjs" scan . -f markdown -o "$env:TEMP\provemark\report.
 | `references/debugging-playbook.md` | 调试：复现→二分→观察→假设，故障签名表，事故复盘 |
 | `references/code-review-playbook.md` | 评审：顺序、diff 卫生、AI 代码重点、评论方式、合并清单 |
 | `references/ai-collaboration.md` | 与模型协作：任务/上下文怎么给、验证闭环、幻觉形态、提示词模式 |
+
+## 9. 这份知识怎么保证是真的
+
+- **可机械核对的部分由脚本守着**：本文与 `references/` 里出现的规则 ID、CLI 子命令、CLI 参数、
+  工具参数名，以及「118 条规则 / 8 个维度 / 19 个生态 / 11 本手册」这类数字，都由
+  `node "<PM>\scripts\audit-skill.mjs"` 对着源码（`rules/catalog.py`、`cli.py`、`lib/index.js`）逐条核对。
+  CI 与发布门禁都跑它——引用一个不存在的规则、写错一个参数名，构建直接失败。
+- **领域手册是判断经验，不是工具承诺**：`*-playbook.md`、`maintenance-discipline.md`、`ai-collaboration.md`
+  回答「怎么判、先修什么、常见修法」，其中引用的规则 ID 同样受上面那条校验约束；
+  但它们不会替扫描器保证某条一定命中——**命不命中看扫描结果**。
+- **字段与数字以运行时为准**：`json-output.md` 的字段来自真实的 `-f json` 输出；
+  版本号以 `package.json` 为准，不写在手册里当常量。
+- 拿不准时先扫一遍再引用文档：文档说的是**规则怎么想**，扫描结果才是**这个仓库怎么了**。

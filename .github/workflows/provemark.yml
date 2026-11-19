@@ -26,13 +26,14 @@ jobs:
         run: python -m pip install "PyYAML>=6"
       - name: Unit tests
         run: python -m unittest discover -s tests -v
-      - name: Plugin checks (validate / selftest / vendor sync)
+      - name: Plugin checks (validate / selftest / vendor sync / skill audit)
         if: matrix.python-version == '3.12'
         run: |
           node --version
           node plugin/provemark-dsh/scripts/validate.mjs
           node plugin/provemark-dsh/scripts/selftest.mjs
           node plugin/provemark-dsh/scripts/sync-vendor.mjs --check
+          node plugin/provemark-dsh/scripts/audit-skill.mjs
       - name: Self scan (offline)
         run: python -m provemark scan . --offline --fail-on high
 

@@ -118,13 +118,19 @@ node scripts\doctor.mjs --json # CI 或脚本消费
 ## 验证
 
 ```pwsh
-node scripts\validate.mjs     # 静态检查：清单 / 两行 patch / SKILL.md / 随包源码
+node scripts\validate.mjs     # 静态检查：清单 / 两行 patch / SKILL.md / 随包源码 / Config schema 对账
 node scripts\selftest.mjs     # 无宿主的端到端自检：模拟 ctx，跑真实扫描、三个工具、进度账本、缓存、事件钩子
+node scripts\audit-skill.mjs  # 知识核对：技能里引用的规则 ID / 子命令 / 参数 / 计数是否与源码一致
 node scripts\install.mjs --check   # 安装状态 + 运行中宿主是否真的加载过本插件
 node bin\provemark.mjs --pm-info   # 用了哪个 Python、扫描器在不在
 ```
 
 `selftest.mjs` 用假的 `defineTool` 模块（`PROVEMARK_DSH_TOOLS_MODULE`）在没有宿主的情况下跑通整条链路，所以改了插件逻辑可以先在这里回归，不必拿宿主当测试环境。
+
+`audit-skill.mjs` 是**知识的防漂移检查**：技能的 19 份文档里引用了 197 处规则 ID、55 条命令、88 个参数、12 个工具参数，
+以及「118 条规则 / 8 个维度 / 19 个生态 / 11 本手册」这些数字——它把每一条对着 `rules/catalog.py`、`cli.py`、
+`lib/index.js` 核对一遍（有 Python 时以运行时为准，没有则跳过规则类检查并明说）。CI 与 `release.mjs` 都跑它，
+引用一个不存在的规则或写错参数名会直接失败。
 
 ### 运行中诊断
 

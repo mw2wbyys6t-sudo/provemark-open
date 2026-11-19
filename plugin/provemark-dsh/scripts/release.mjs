@@ -78,6 +78,7 @@ if (!flag('--skip-checks')) {
     ['validate', process.execPath, [join(ROOT, 'scripts', 'validate.mjs')]],
     ['vendor sync', process.execPath, [join(ROOT, 'scripts', 'sync-vendor.mjs'), '--check']],
     ['selftest', process.execPath, [join(ROOT, 'scripts', 'selftest.mjs')]],
+    ['skill audit', process.execPath, [join(ROOT, 'scripts', 'audit-skill.mjs')]],
   ];
   for (const [label, command, commandArgs] of checks) {
     const result = run(label, command, commandArgs);

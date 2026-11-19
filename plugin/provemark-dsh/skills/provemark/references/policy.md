@@ -60,7 +60,9 @@ enabled = true                # false = 等价于始终 --offline
 # allowed_indexes = ["pypi.org", "registry.npmjs.org"]   # 非默认源时不再报 SCP-006
 
 [severity]
-# 按规则覆盖级别：AI-004 = "info"、HYG-010 = "medium"
+# 按规则覆盖级别：键 = 规则 ID，值 = 目标级别。注释里括号内是这条规则的**内置默认**。
+# AI-004 = "info"      # 异常被静默吞掉：medium → info（只提示，不计分）
+# HYG-010 = "medium"   # 没有 CI 配置：low → medium（提一级）
 # 键必须是形如 XX-000 的规则 ID
 
 [[ignore]]
