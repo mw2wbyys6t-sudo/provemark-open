@@ -30,6 +30,7 @@ writing</b> — and hands back a fix you can execute.
 <a href="#demo"><b>Demo</b></a> ·
 <a href="#quickstart"><b>Quick start</b></a> ·
 <a href="#dsh-plugin"><b>DSH plugin</b></a> ·
+<a href="#lingshu"><b>LINGSHU panel</b></a> ·
 <a href="#rules"><b>Rules</b></a> ·
 <a href="#cases"><b>Case studies</b></a> ·
 <a href="#fossa"><b>FOSSA</b></a> ·
@@ -463,6 +464,73 @@ Once installed it does four things:
 - 💻 `bin/provemark.mjs` still works as a plain CLI (Python lookup order: `PROVEMARK_PYTHON` → `python3`/`python`/`py -3` → `~/.dsh/dsh-runtimes/**`);
 - 📦 The vendored source is a **read-only copy**: after editing `provemark/` run `scripts/sync-vendor.mjs`; `tests/test_plugin.py` fails on drift;
 - 🗑️ Uninstall: `scripts/uninstall.mjs` (the profile `package.json` is backed up as `package.json.provemark-backup` on install).
+
+---
+
+<a name="lingshu"></a>
+## 🧭 LINGSHU · cognitive workspace: the "panel form" of the same plugin
+
+A DSH plugin does not exist in only one shape. Besides the in-conversation trio (system prompt section, dynamic context block, native tools), it can bring its own **workspace panel** — `LINGSHU` (v0.8.1) is Provemark's companion cognitive panel. Same profile, same tool capabilities; in the panel they become seven pages you can click, search and trace. Navigation on the left, real tool receipts on the right.
+
+**The panel is not a skin over the chat window**: when you hit "Execute query", it travels the very same tool channel the model uses and returns the same data — not locally fabricated samples.
+
+> This section documents the panel form and its contract. The panel itself is not in this repository — here you only find the scan engine (`provemark/`) and the plugin tool contract (`plugin/provemark-dsh/`). Scoring, verdicts and the gate still come from those two; the panel never scores, and opening a page never changes a conclusion.
+
+### 🗂️ Seven sections, one job each
+
+| Section | The question it answers | Key actions |
+| --- | --- | --- |
+| **Overview** | How large is this cognitive graph right now? | Four counters (memory nodes / active goals / pending review / protected), recent memories, runtime state; one-click "Record memory" |
+| **Memory** | Did I actually record this? | Keyword or question search, filtered by "all layers"; "Recently written memories" shows the count, scenario tag, timestamp and `mem_*` id |
+| **Goals & tasks** | Which trackable actions did a goal break into? | Goal list / task list / new goal / open task |
+| **Self & identity** | Who am I, what state am I in, what did I reflect on? | Identity profile / state snapshot / metacognition report / white-box link |
+| **Space & time** | How do memories line up on the timeline, and how are nodes related? | Memory timeline / recent events / node relations / spatio-temporal consistency / anchor lookup / state chain |
+| **Review & care** | Which candidates should stay, and which should be forgotten? | Pending candidates / review log / protection stats / evolution summary / maintenance state / review verdict / node verification |
+| **Toolbox** | Which tools can the panel call at all? | Tool overview: open any card for its help, then execute |
+
+Every section keeps one line pinned at the bottom: **the cognitive graph is the single source of truth; every operation leaves a trace.**
+
+### 🔌 Every card is a real tool call
+
+There is no such thing as "demo data" in these pages. Take "Goals & tasks → Goal list"; the card holds exactly three things:
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│ 目标列表                                        cg-goal    │
+│ 无需额外参数。点击执行，读取真实数据。                       │
+│ ▸ 原始调用参数                                              │
+│                               [ 查看帮助 ]  [ 执行查询 ]    │
+└────────────────────────────────────────────────────────────┘
+```
+
+- The `cg-goal` in the top-right corner is **the tool behind this card**, so it maps directly to what the model calls in conversation;
+- "No extra parameters needed" states plainly that the argument set is empty — one click runs it;
+- "Raw call parameters" expands, so cards that do need arguments lay them out verbatim instead of quietly filling something in for you;
+- "View help" reads the tool's own description; only "Execute query" fires the call and pastes the receipt back into the card;
+- Different sections sit on different tool families: cognition-side `cg-*` (e.g. `cg-goal`, `cg-identity`, `cg-review`) and space-time-side `stg-*` (e.g. `stg-timeline`).
+
+That is why the panel earns its place: to call these tools, a model must first know their names, arguments and boundaries; a human who wants the same thing should not have to memorise the contract first. **One contract, two entrances.**
+
+### 🚧 Four boundaries, hard-coded into the UI
+
+The panel deliberately separates "what it can do" from "what it must not do on its own":
+
+1. **Read first, write last**: writing has a single entrance (Overview's "Record memory", the Memory page's "memory gate"); every other page is read-only by default;
+2. **Look before you rule**: the Review & care page says outright that "opening the page will not start maintenance, forgetting or automatic evolution" — viewing is not approving;
+3. **Generated text is not fact**: Self & identity splits identity, state and reflection into three tabs and notes that generated text is not treated as a cognitive fact;
+4. **Permissions stay visible**: the runtime card on Overview lists the brain bridge, write permission, visibility level and automatic recall, and adds "tool visibility is not full permission — existing boundaries are kept".
+
+### 🧩 How it pairs with the in-conversation plugin
+
+| What you are doing | Which surface to use |
+| --- | --- |
+| Writing code and getting blocked by the guard | In-conversation guardrails + workspace state block + `provemark_guard` |
+| Asking "why did we change this last time?" | LINGSHU → Memory, search by keyword or question |
+| Persisting a conclusion | LINGSHU → Overview → "+ Record memory" |
+| Auditing whether a memory should be kept | LINGSHU → Review & care → Pending candidates |
+| Treating the panel as a tool manual | LINGSHU → Toolbox → "View help" on each card |
+
+Visually it is a dark workbench: fixed sections on the left, a single content column on the right, with "Toggle theme" and "Back to chat" pinned at the bottom of the sidebar — check the data, then return to the conversation without losing context.
 
 ---
 
